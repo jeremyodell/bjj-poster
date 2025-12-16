@@ -78,6 +78,7 @@ awslocal dynamodb put-item \
   --item '{
     "PK": {"S": "TEMPLATE"},
     "SK": {"S": "tournament#tmpl_001"},
+    "entityType": {"S": "TEMPLATE"},
     "templateId": {"S": "tmpl_001"},
     "name": {"S": "Classic Tournament"},
     "description": {"S": "Bold text with action photo background"},
@@ -92,12 +93,28 @@ awslocal dynamodb put-item \
   --item '{
     "PK": {"S": "TEMPLATE"},
     "SK": {"S": "tournament#tmpl_002"},
+    "entityType": {"S": "TEMPLATE"},
     "templateId": {"S": "tmpl_002"},
     "name": {"S": "Modern Gradient"},
     "description": {"S": "Clean gradient background with centered athlete"},
     "category": {"S": "tournament"},
     "thumbnailUrl": {"S": "https://bjj-poster-templates.s3.localhost.localstack.cloud:4566/thumbnails/gradient.png"},
     "isPremium": {"BOOL": true},
+    "createdAt": {"S": "2024-01-01T00:00:00Z"}
+  }'
+
+awslocal dynamodb put-item \
+  --table-name bjj-poster-app \
+  --item '{
+    "PK": {"S": "TEMPLATE"},
+    "SK": {"S": "promotion#tmpl_003"},
+    "entityType": {"S": "TEMPLATE"},
+    "templateId": {"S": "tmpl_003"},
+    "name": {"S": "Belt Promotion"},
+    "description": {"S": "Celebrate your belt promotion with this elegant design"},
+    "category": {"S": "promotion"},
+    "thumbnailUrl": {"S": "https://bjj-poster-templates.s3.localhost.localstack.cloud:4566/thumbnails/promotion.png"},
+    "isPremium": {"BOOL": false},
     "createdAt": {"S": "2024-01-01T00:00:00Z"}
   }'
 

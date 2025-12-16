@@ -8,6 +8,7 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-l
 
 // Import handlers as they're created
 import { handler as helloHandler } from './handlers/hello/index.js';
+import { listTemplatesHandler } from './handlers/templates/index.js';
 // import { handler as getProfile } from './handlers/user/get-profile';
 // import { handler as createPoster } from './handlers/poster/create-poster';
 
@@ -155,24 +156,8 @@ app.get('/api/users/:id', (req, res) => {
   });
 });
 
-app.get('/api/templates', (req, res) => {
-  res.json([
-    {
-      templateId: 'tmpl_001',
-      name: 'Classic Tournament',
-      description: 'Bold text with action photo background',
-      category: 'tournament',
-      isPremium: false,
-    },
-    {
-      templateId: 'tmpl_002',
-      name: 'Modern Gradient',
-      description: 'Clean gradient background with centered athlete',
-      category: 'tournament',
-      isPremium: true,
-    },
-  ]);
-});
+// Templates - real handler using database
+app.get('/api/templates', lambdaAdapter(listTemplatesHandler));
 
 app.get('/api/posters', (req, res) => {
   res.json([]);

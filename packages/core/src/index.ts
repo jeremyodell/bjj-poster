@@ -3,6 +3,6 @@
 // ===========================================
 
 // Re-export all modules
-export * from './errors';
-export * from './logger';
-export * from './types';
+export * from './errors.js';
+export * from './logger.js';
+export * from './types.js';

@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch src/local-server.ts",
-    "build": "tsup src/handlers/**/index.ts --format cjs --dts --clean && mv dist/index.cjs dist/index.js",
+    "build": "pnpm build:handlers && pnpm build:rename",
+    "build:handlers": "tsup src/handlers/hello/index.ts src/handlers/templates/list-templates.ts --format cjs --clean --out-dir dist",
+    "build:rename": "find dist -name '*.cjs' -exec sh -c 'mv \"$1\" \"${1%.cjs}.js\"' _ {} \\;",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
