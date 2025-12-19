@@ -197,9 +197,62 @@ bjj-poster-app/
 |------|---------|
 | `CLAUDE.md` | Claude Code configuration and coding standards |
 | `.claude/skills/*.md` | Reusable patterns for common tasks |
+| `.claude/commands/*.md` | Custom slash commands for scaffolding |
 | `docker-compose.yml` | LocalStack and local services |
 | `turbo.json` | Monorepo task configuration |
 | `.env.example` | Environment variables template |
+
+## Claude Code Skills & Commands
+
+We've created custom skills and commands to help you write consistent, high-quality code. Claude Code automatically uses these when relevant.
+
+### Skills
+
+Skills are reference documents that teach Claude our patterns. You don't invoke them directly—Claude uses them automatically when you're working on related tasks.
+
+| Skill | When It's Used |
+|-------|----------------|
+| **lambda-handler.md** | Creating API endpoints, SQS consumers, EventBridge handlers |
+| **dynamodb-operations.md** | Writing DynamoDB queries, repository functions |
+| **react-component.md** | Building React/Next.js components |
+| **cdk-infrastructure.md** | Writing AWS CDK stacks and constructs |
+| **image-processing.md** | Working with Sharp.js for poster composition |
+
+**Tip:** You can reference a skill explicitly in your prompt:
+
+```
+"Help me create a Lambda handler following the patterns in .claude/skills/lambda-handler.md"
+```
+
+### Slash Commands
+
+Commands are scaffolding tools you invoke directly. Type them in Claude Code to generate boilerplate.
+
+| Command | What It Does |
+|---------|--------------|
+| `/new-image-function <name>` | Scaffolds an image processing function with tests |
+
+**Example usage:**
+
+```bash
+# In Claude Code
+/new-image-function createGradientBackground
+
+# Claude will:
+# 1. Ask clarifying questions about inputs/outputs
+# 2. Create packages/core/src/image/create-gradient-background.ts
+# 3. Create matching test file
+# 4. Add export to barrel file
+```
+
+### When to Use What
+
+| Scenario | What to Do |
+|----------|------------|
+| Starting a new Lambda endpoint | Just describe the endpoint—Claude will use the lambda-handler skill automatically |
+| Need help with DynamoDB queries | Ask your question—Claude will apply dynamodb-operations patterns |
+| Creating a new image function | Run `/new-image-function <name>` to scaffold, then fill in the TODOs |
+| Unsure which skill applies | Just ask! Claude will figure it out from context |
 
 ## Common Commands
 

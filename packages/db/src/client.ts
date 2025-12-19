@@ -1,9 +1,9 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 
-const isLocal = 
-  process.env.NODE_ENV === 'development' || 
-  process.env.USE_LOCALSTACK === 'true';
+// Only use LocalStack when explicitly enabled (not just NODE_ENV=development)
+// This allows dev stage in AWS to use real DynamoDB
+const isLocal = process.env.USE_LOCALSTACK === 'true';
 
 const baseClient = new DynamoDBClient(
   isLocal
