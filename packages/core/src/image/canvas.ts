@@ -1,31 +1,10 @@
 import sharp, { Sharp } from 'sharp';
 import { InvalidInputError } from './errors.js';
+import { isValidHexColor, hexToRgb } from './color-utils.js';
 import type { CanvasOptions, GradientStop, GradientDirection } from './types.js';
 
 const MAX_DIMENSION = 10000;
 const MIN_DIMENSION = 1;
-
-/**
- * Validate hex color format
- */
-function isValidHexColor(color: string): boolean {
-  return /^#[0-9a-fA-F]{6}$/.test(color);
-}
-
-/**
- * Parse hex color to RGB values
- */
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const result = /^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/.exec(hex);
-  if (!result) {
-    throw new InvalidInputError(`Invalid hex color format: ${hex}. Expected format: #rrggbb`);
-  }
-  return {
-    r: parseInt(result[1], 16),
-    g: parseInt(result[2], 16),
-    b: parseInt(result[3], 16),
-  };
-}
 
 /**
  * Validate canvas dimensions

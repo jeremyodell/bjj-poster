@@ -334,7 +334,7 @@ describe('createCanvas', () => {
       ).rejects.toThrow(InvalidInputError);
     });
 
-    it('throws for gradient with invalid stop position', async () => {
+    it('throws for gradient with negative stop position', async () => {
       await expect(
         createCanvas({
           width: 100,
@@ -345,6 +345,23 @@ describe('createCanvas', () => {
             stops: [
               { color: '#000000', position: -10 },
               { color: '#ffffff', position: 100 },
+            ],
+          },
+        })
+      ).rejects.toThrow(InvalidInputError);
+    });
+
+    it('throws for gradient with stop position exceeding 100', async () => {
+      await expect(
+        createCanvas({
+          width: 100,
+          height: 100,
+          fill: {
+            type: 'gradient',
+            direction: 'to-bottom',
+            stops: [
+              { color: '#000000', position: 0 },
+              { color: '#ffffff', position: 150 },
             ],
           },
         })

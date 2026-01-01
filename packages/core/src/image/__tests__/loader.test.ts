@@ -75,6 +75,48 @@ describe('loadImage from URL', () => {
 
     await expect(loadImage('https://example.com/page.html')).rejects.toThrow(InvalidInputError);
   });
+
+  it('throws ImageProcessingError when fetch times out', async () => {
+    vi.mocked(global.fetch).mockImplementationOnce(() => {
+      return new Promise((_, reject) => {
+        const abortError = new Error('The operation was aborted');
+        abortError.name = 'AbortError';
+        reject(abortError);
+      });
+    });
+
+    await expect(loadImage('https://example.com/slow.png')).rejects.toThrow(/timed out/);
+  });
+
+  it('throws InvalidInputError when Content-Length exceeds size limit', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      headers: new Headers({
+        'content-type': 'image/png',
+        'content-length': '15000000', // 15MB, exceeds 10MB limit
+      }),
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    } as Response);
+
+    await expect(loadImage('https://example.com/huge.png')).rejects.toThrow(
+      /Image too large.*exceeds.*byte limit/
+    );
+  });
+
+  it('throws InvalidInputError when actual body size exceeds limit', async () => {
+    // Create a mock response where Content-Length is not set but body is too large
+    const largeBuffer = new ArrayBuffer(11 * 1024 * 1024); // 11MB
+
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      headers: new Headers({ 'content-type': 'image/png' }),
+      arrayBuffer: () => Promise.resolve(largeBuffer),
+    } as Response);
+
+    await expect(loadImage('https://example.com/large.png')).rejects.toThrow(
+      /Image too large.*exceeds.*byte limit/
+    );
+  });
 });
 
 describe('loadImage URL security', () => {
