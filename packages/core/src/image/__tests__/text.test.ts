@@ -509,13 +509,10 @@ describe('addText', () => {
   });
 
   describe('custom fonts', () => {
-    it('renders with registered custom font', async () => {
-      const fontPath = join(FONTS_DIR, 'Oswald-Bold.ttf');
-      if (!existsSync(fontPath)) {
-        // Skip if font not available
-        return;
-      }
+    const fontPath = join(FONTS_DIR, 'Oswald-Bold.ttf');
+    const fontExists = existsSync(fontPath);
 
+    it.skipIf(!fontExists)('renders with registered custom font', async () => {
       await registerFont('Oswald-Bold', fontPath);
       expect(isFontRegistered('Oswald-Bold')).toBe(true);
 
@@ -574,12 +571,25 @@ describe('addText', () => {
       expect(buffer).toBeInstanceOf(Buffer);
     });
 
-    it('initializes bundled fonts', async () => {
-      await initBundledFonts();
+    it('initializes bundled fonts and returns result object', async () => {
+      const result = await initBundledFonts();
 
+      // Result should have the correct shape
+      expect(result).toHaveProperty('loaded');
+      expect(result).toHaveProperty('failed');
+      expect(Array.isArray(result.loaded)).toBe(true);
+      expect(Array.isArray(result.failed)).toBe(true);
+
+      // If fonts directory exists, we should have loaded some fonts
+      const fontsDir = join(FONTS_DIR);
+      if (existsSync(fontsDir)) {
+        // At least one font should have loaded or failed (not silently ignored)
+        expect(result.loaded.length + result.failed.length).toBeGreaterThan(0);
+      }
+
+      // Verify fonts are actually registered
       const fonts = listFonts();
-      // At least some bundled fonts should be registered if they exist
-      expect(fonts.length).toBeGreaterThanOrEqual(0);
+      expect(fonts.length).toBe(result.loaded.length);
     });
   });
 
@@ -787,6 +797,162 @@ describe('addText', () => {
         })
       ).rejects.toThrow(InvalidInputError);
     });
+
+    it('throws for letter spacing exceeding maximum', async () => {
+      const canvas = await createCanvas({
+        width: 100,
+        height: 100,
+        fill: { type: 'solid', color: '#000000' },
+      });
+
+      await expect(
+        addText({
+          image: canvas,
+          layers: [
+            {
+              content: 'Test',
+              position: 'center',
+              style: {
+                fontFamily: 'sans-serif',
+                fontSize: 16,
+                color: '#ffffff',
+                letterSpacing: 150, // Exceeds MAX_LETTER_SPACING (100)
+              },
+            },
+          ],
+        })
+      ).rejects.toThrow(InvalidInputError);
+    });
+
+    it('throws for stroke width exceeding maximum', async () => {
+      const canvas = await createCanvas({
+        width: 100,
+        height: 100,
+        fill: { type: 'solid', color: '#000000' },
+      });
+
+      await expect(
+        addText({
+          image: canvas,
+          layers: [
+            {
+              content: 'Test',
+              position: 'center',
+              style: {
+                fontFamily: 'sans-serif',
+                fontSize: 16,
+                color: '#ffffff',
+                stroke: { width: 60, color: '#ff0000' }, // Exceeds MAX_STROKE_WIDTH (50)
+              },
+            },
+          ],
+        })
+      ).rejects.toThrow(InvalidInputError);
+    });
+
+    it('throws for non-number letter spacing', async () => {
+      const canvas = await createCanvas({
+        width: 100,
+        height: 100,
+        fill: { type: 'solid', color: '#000000' },
+      });
+
+      await expect(
+        addText({
+          image: canvas,
+          layers: [
+            {
+              content: 'Test',
+              position: 'center',
+              style: {
+                fontFamily: 'sans-serif',
+                fontSize: 16,
+                color: '#ffffff',
+                letterSpacing: 'wide' as unknown as number, // Invalid type
+              },
+            },
+          ],
+        })
+      ).rejects.toThrow(InvalidInputError);
+    });
+
+    it('throws for shadow blur exceeding maximum', async () => {
+      const canvas = await createCanvas({
+        width: 100,
+        height: 100,
+        fill: { type: 'solid', color: '#000000' },
+      });
+
+      await expect(
+        addText({
+          image: canvas,
+          layers: [
+            {
+              content: 'Test',
+              position: 'center',
+              style: {
+                fontFamily: 'sans-serif',
+                fontSize: 16,
+                color: '#ffffff',
+                shadow: { blur: 150, offsetX: 0, offsetY: 0, color: '#000000' }, // Exceeds MAX_BLUR (100)
+              },
+            },
+          ],
+        })
+      ).rejects.toThrow(InvalidInputError);
+    });
+
+    it('throws for invalid shadow color', async () => {
+      const canvas = await createCanvas({
+        width: 100,
+        height: 100,
+        fill: { type: 'solid', color: '#000000' },
+      });
+
+      await expect(
+        addText({
+          image: canvas,
+          layers: [
+            {
+              content: 'Test',
+              position: 'center',
+              style: {
+                fontFamily: 'sans-serif',
+                fontSize: 16,
+                color: '#ffffff',
+                shadow: { blur: 4, offsetX: 0, offsetY: 0, color: 'invalid-color' },
+              },
+            },
+          ],
+        })
+      ).rejects.toThrow(InvalidInputError);
+    });
+
+    it('throws for unregistered font when strictFont is enabled', async () => {
+      const canvas = await createCanvas({
+        width: 100,
+        height: 100,
+        fill: { type: 'solid', color: '#000000' },
+      });
+
+      await expect(
+        addText({
+          image: canvas,
+          layers: [
+            {
+              content: 'Test',
+              position: 'center',
+              style: {
+                fontFamily: 'NonExistentFont',
+                fontSize: 16,
+                color: '#ffffff',
+              },
+            },
+          ],
+          strictFont: true,
+        })
+      ).rejects.toThrow(InvalidInputError);
+    });
   });
 
   describe('named positions', () => {
@@ -835,6 +1001,156 @@ describe('addText', () => {
               fontSize: 24,
               color: '#ffffff',
               align: 'center',
+            },
+          },
+        ],
+      });
+
+      const buffer = await result.png().toBuffer();
+      expect(buffer).toBeInstanceOf(Buffer);
+    });
+  });
+
+  describe('security', () => {
+    it('escapes XSS attempts in text content', async () => {
+      const canvas = await createCanvas({
+        width: 400,
+        height: 200,
+        fill: { type: 'solid', color: '#1a1a1a' },
+      });
+
+      // This should not throw and the malicious content should be escaped
+      const result = await addText({
+        image: canvas,
+        layers: [
+          {
+            content: '<script>alert("xss")</script>',
+            position: 'center',
+            style: {
+              fontFamily: 'sans-serif',
+              fontSize: 16,
+              color: '#ffffff',
+              align: 'center',
+            },
+          },
+        ],
+      });
+
+      const buffer = await result.png().toBuffer();
+      expect(buffer).toBeInstanceOf(Buffer);
+      // The text should be rendered (escaped), not executed
+      expect(buffer.length).toBeGreaterThan(0);
+    });
+
+    it('escapes SVG injection attempts in text content', async () => {
+      const canvas = await createCanvas({
+        width: 400,
+        height: 200,
+        fill: { type: 'solid', color: '#1a1a1a' },
+      });
+
+      const result = await addText({
+        image: canvas,
+        layers: [
+          {
+            content: '"></text><image href="http://evil.com/steal.png"/>',
+            position: 'center',
+            style: {
+              fontFamily: 'sans-serif',
+              fontSize: 16,
+              color: '#ffffff',
+            },
+          },
+        ],
+      });
+
+      const buffer = await result.png().toBuffer();
+      expect(buffer).toBeInstanceOf(Buffer);
+    });
+  });
+
+  describe('Buffer input', () => {
+    it('accepts Buffer as image input instead of Sharp instance', async () => {
+      const canvas = await createCanvas({
+        width: 400,
+        height: 200,
+        fill: { type: 'solid', color: '#1a1a1a' },
+      });
+
+      // Convert Sharp instance to Buffer
+      const imageBuffer = await canvas.png().toBuffer();
+
+      // Pass Buffer directly to addText
+      const result = await addText({
+        image: imageBuffer,
+        layers: [
+          {
+            content: 'Buffer Input Test',
+            position: 'center',
+            style: {
+              fontFamily: 'sans-serif',
+              fontSize: 24,
+              color: '#ffffff',
+              align: 'center',
+            },
+          },
+        ],
+      });
+
+      const outputBuffer = await result.png().toBuffer();
+      const metadata = await sharp(outputBuffer).metadata();
+
+      expect(outputBuffer).toBeInstanceOf(Buffer);
+      expect(metadata.width).toBe(400);
+      expect(metadata.height).toBe(200);
+    });
+  });
+
+  describe('named positions extended', () => {
+    it('renders at left-center position', async () => {
+      const canvas = await createCanvas({
+        width: 400,
+        height: 200,
+        fill: { type: 'solid', color: '#1a1a1a' },
+      });
+
+      const result = await addText({
+        image: canvas,
+        layers: [
+          {
+            content: 'Left Center',
+            position: 'left-center',
+            style: {
+              fontFamily: 'sans-serif',
+              fontSize: 24,
+              color: '#ffffff',
+            },
+          },
+        ],
+      });
+
+      const buffer = await result.png().toBuffer();
+      expect(buffer).toBeInstanceOf(Buffer);
+    });
+
+    it('renders at right-center position', async () => {
+      const canvas = await createCanvas({
+        width: 400,
+        height: 200,
+        fill: { type: 'solid', color: '#1a1a1a' },
+      });
+
+      const result = await addText({
+        image: canvas,
+        layers: [
+          {
+            content: 'Right Center',
+            position: 'right-center',
+            style: {
+              fontFamily: 'sans-serif',
+              fontSize: 24,
+              color: '#ffffff',
+              align: 'right',
             },
           },
         ],

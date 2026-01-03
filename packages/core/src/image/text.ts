@@ -1,7 +1,7 @@
 import sharp, { Sharp } from 'sharp';
 import { logger } from '../logger.js';
 import { ImageProcessingError, InvalidInputError } from './errors.js';
-import { isValidHexColor, parseColor } from './color-utils.js';
+import { isValidHexColor, parseColor, parseRgbaColor } from './color-utils.js';
 import { getFont, getDefaultFont } from './fonts.js';
 import type {
   Position,
@@ -15,6 +15,7 @@ const MAX_FONT_SIZE = 500;
 const MIN_FONT_SIZE = 1;
 const MAX_LETTER_SPACING = 100;
 const MAX_STROKE_WIDTH = 50;
+const MAX_BLUR = 100;
 
 /**
  * Apply text transform to content
@@ -50,12 +51,13 @@ function escapeXml(text: string): string {
 }
 
 /**
- * Escape font family name for safe use in SVG attributes.
- * Removes any characters that could break out of the attribute.
+ * Escape font family name for safe use in SVG/CSS attributes.
+ * Removes any characters that could break out of the attribute or CSS context.
  */
 function escapeFontFamily(fontFamily: string): string {
-  // Remove any characters that could break SVG attribute syntax
-  return fontFamily.replace(/['"<>&]/g, '');
+  // Remove any characters that could break SVG attribute syntax or CSS
+  // Includes: quotes, XML entities, CSS-breaking chars (semicolon, braces, backslash)
+  return fontFamily.replace(/['"<>&;{}\\]/g, '');
 }
 
 /**
@@ -176,7 +178,17 @@ function validateStyle(style: TextStyle): void {
     if (style.shadow.blur < 0) {
       throw new InvalidInputError('Shadow blur must be non-negative');
     }
-    // Shadow color is validated by parseColor later
+    if (style.shadow.blur > MAX_BLUR) {
+      throw new InvalidInputError(`Shadow blur exceeds maximum of ${MAX_BLUR}px`);
+    }
+    // Validate shadow color upfront (supports both hex and rgba formats)
+    const isHex = isValidHexColor(style.shadow.color);
+    const isRgba = parseRgbaColor(style.shadow.color) !== null;
+    if (!isHex && !isRgba) {
+      throw new InvalidInputError(
+        `Invalid shadow color: ${style.shadow.color}. Expected format: #rrggbb or rgba(r,g,b,a)`
+      );
+    }
   }
 
   if (style.maxWidth !== undefined && style.maxWidth <= 0) {
@@ -246,7 +258,9 @@ function buildTextSvg(
   let textElement: string;
 
   if (style.stroke && style.stroke.width > 0) {
-    // Render stroke first, then fill on top
+    // Render stroke first (as background), then fill on top for proper text outline effect.
+    // The stroke is doubled (width * 2) because SVG strokes are centered on the path,
+    // so half would be clipped by the fill layer on top.
     textElement = `
       <text x="${x}" y="${y}"
         font-family="'${fontFamily}'"
@@ -381,7 +395,7 @@ function calculateFittedFontSize(
  * ```
  */
 export async function addText(options: AddTextOptions): Promise<Sharp> {
-  const { image, layers } = options;
+  const { image, layers, strictFont = false } = options;
 
   if (!layers || layers.length === 0) {
     // No text to add, return image as-is
@@ -410,9 +424,15 @@ export async function addText(options: AddTextOptions): Promise<Sharp> {
       // Validate style
       validateStyle(layer.style);
 
-      // Get font data if registered, otherwise log warning and use fallback
+      // Get font data if registered, otherwise handle based on strictFont option
       const fontData = getFont(layer.style.fontFamily);
       if (!fontData) {
+        if (strictFont) {
+          throw new InvalidInputError(
+            `Font '${layer.style.fontFamily}' is not registered. ` +
+              `Register it with registerFont() or initBundledFonts() before use.`
+          );
+        }
         logger.warn('Font not registered, using fallback', {
           requestedFont: layer.style.fontFamily,
           fallbackFont: getDefaultFont(),
@@ -449,11 +469,27 @@ export async function addText(options: AddTextOptions): Promise<Sharp> {
 
     return sharp(result);
   } catch (error) {
+    // Re-throw domain errors as-is
     if (error instanceof InvalidInputError) {
       throw error;
     }
 
-    logger.error('addText failed', { error });
+    // Let programming errors (TypeError, ReferenceError, etc.) propagate unwrapped
+    // so they're not hidden behind ImageProcessingError
+    if (
+      error instanceof TypeError ||
+      error instanceof ReferenceError ||
+      error instanceof RangeError ||
+      error instanceof SyntaxError
+    ) {
+      throw error;
+    }
+
+    logger.error('addText failed', {
+      error,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     throw new ImageProcessingError(
       `Failed to add text: ${error instanceof Error ? error.message : 'Unknown error'}`
     );

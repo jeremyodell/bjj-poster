@@ -113,7 +113,7 @@ export interface TextStroke {
  * Style configuration for text rendering
  */
 export interface TextStyle {
-  /** Font family name (must be registered) or path to .ttf/.otf file */
+  /** Font family name (must be registered via registerFont or initBundledFonts) */
   fontFamily: string;
   /** Font size in pixels */
   fontSize: number;
@@ -153,4 +153,9 @@ export interface AddTextOptions {
   image: import('sharp').Sharp | Buffer;
   /** Text layers to render */
   layers: TextLayer[];
+  /**
+   * If true, throws InvalidInputError when a requested font is not registered.
+   * If false (default), falls back to system font with a warning.
+   */
+  strictFont?: boolean;
 }

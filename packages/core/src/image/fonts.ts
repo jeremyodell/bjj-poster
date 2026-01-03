@@ -119,28 +119,58 @@ export function getDefaultFont(): string {
 }
 
 /**
+ * Result from initializing bundled fonts
+ */
+export interface InitBundledFontsResult {
+  /** Fonts that were successfully loaded */
+  loaded: string[];
+  /** Fonts that failed to load with their error messages */
+  failed: Array<{ name: string; reason: string }>;
+}
+
+/**
  * Initialize bundled fonts. This registers all fonts that come with the package.
  * Should be called once at startup if you want to use bundled fonts.
  *
+ * Note: BUNDLED_FONTS must stay in sync with the files in packages/core/assets/fonts/
+ *
+ * @returns Result object showing which fonts loaded successfully and which failed
+ *
  * @example
  * ```typescript
- * await initBundledFonts();
+ * const result = await initBundledFonts();
+ * console.log('Loaded fonts:', result.loaded);
+ * if (result.failed.length > 0) {
+ *   console.warn('Failed to load:', result.failed);
+ * }
  * // Now 'Oswald-Bold', 'Roboto-Regular', 'BebasNeue-Regular' are available
  * ```
  */
-export async function initBundledFonts(): Promise<void> {
+export async function initBundledFonts(): Promise<InitBundledFontsResult> {
+  const result: InitBundledFontsResult = {
+    loaded: [],
+    failed: [],
+  };
+
   for (const [name, filename] of Object.entries(BUNDLED_FONTS)) {
     const fontPath = join(BUNDLED_FONTS_DIR, filename);
     if (existsSync(fontPath)) {
       try {
         await registerFont(name, fontPath);
+        result.loaded.push(name);
       } catch (error) {
-        logger.warn('Failed to load bundled font', { name, error });
+        const reason = error instanceof Error ? error.message : 'Unknown error';
+        result.failed.push({ name, reason });
+        logger.error('Failed to load bundled font', { name, error });
       }
     } else {
-      logger.warn('Bundled font file not found', { name, path: fontPath });
+      const reason = `File not found: ${fontPath}`;
+      result.failed.push({ name, reason });
+      logger.error('Bundled font file not found', { name, path: fontPath });
     }
   }
+
+  return result;
 }
 
 /**

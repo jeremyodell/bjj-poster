@@ -171,20 +171,25 @@ describe('font management', () => {
       expect(bundled).toContain('BebasNeue-Regular');
     });
 
-    it('initializes bundled fonts when files exist', async () => {
-      await initBundledFonts();
+    it('initializes bundled fonts and returns result object', async () => {
+      const result = await initBundledFonts();
 
-      const fonts = listFonts();
+      // Result should have the correct shape
+      expect(result).toHaveProperty('loaded');
+      expect(result).toHaveProperty('failed');
+      expect(Array.isArray(result.loaded)).toBe(true);
+      expect(Array.isArray(result.failed)).toBe(true);
 
       // Check each bundled font - should be registered if file exists
       const bundledFontPath = join(FONTS_DIR, 'Oswald-Bold.ttf');
       if (existsSync(bundledFontPath)) {
-        expect(fonts).toContain('Oswald-Bold');
+        expect(result.loaded).toContain('Oswald-Bold');
+        expect(listFonts()).toContain('Oswald-Bold');
       }
     });
 
     it('registers all available bundled fonts', async () => {
-      await initBundledFonts();
+      const result = await initBundledFonts();
 
       const fonts = listFonts();
       const bundled = listBundledFonts();
@@ -194,7 +199,24 @@ describe('font management', () => {
         const fontPath = join(FONTS_DIR, `${fontName.replace('-', '-')}.ttf`);
         if (existsSync(fontPath)) {
           expect(fonts).toContain(fontName);
+          expect(result.loaded).toContain(fontName);
         }
+      }
+
+      // Verify that loaded + failed accounts for all bundled fonts
+      expect(result.loaded.length + result.failed.length).toBe(bundled.length);
+    });
+
+    it('reports failed fonts in result when files are missing', async () => {
+      // This test verifies the structure of failed entries
+      const result = await initBundledFonts();
+
+      // Each failed entry should have name and reason
+      for (const failed of result.failed) {
+        expect(failed).toHaveProperty('name');
+        expect(failed).toHaveProperty('reason');
+        expect(typeof failed.name).toBe('string');
+        expect(typeof failed.reason).toBe('string');
       }
     });
   });

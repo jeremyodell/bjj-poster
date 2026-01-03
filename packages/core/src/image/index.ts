@@ -12,6 +12,7 @@ export {
   listBundledFonts,
   clearFonts,
 } from './fonts.js';
+export type { InitBundledFontsResult } from './fonts.js';
 export { ImageProcessingError, InvalidInputError, FontLoadError } from './errors.js';
 export {
   isValidHexColor,
