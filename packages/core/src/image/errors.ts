@@ -19,3 +19,16 @@ export class InvalidInputError extends AppError {
     this.name = 'InvalidInputError';
   }
 }
+
+/**
+ * Thrown when a font cannot be loaded
+ */
+export class FontLoadError extends AppError {
+  constructor(fontName: string, reason?: string) {
+    const message = reason
+      ? `Failed to load font '${fontName}': ${reason}`
+      : `Failed to load font '${fontName}'`;
+    super(message, 500, 'FONT_LOAD_ERROR');
+    this.name = 'FontLoadError';
+  }
+}
