@@ -1,3 +1,53 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* BJJ Poster Design System - Dark Theme */
+    --background: 230 38% 16%; /* primary-900 #1a1f3a */
+    --foreground: 0 0% 98%; /* white text */
+
+    --card: 231 31% 22%; /* primary-800 #252b4a */
+    --card-foreground: 0 0% 98%;
+
+    --popover: 231 31% 22%; /* primary-800 */
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 229 83% 60%; /* primary-500 #4361ee */
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 230 31% 27%; /* primary-700 #2f365a */
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 231 29% 32%; /* primary-600 #3a4269 */
+    --muted-foreground: 225 79% 71%; /* primary-300 #7a95f3 */
+
+    --accent: 46 65% 52%; /* accent-gold #d4af37 */
+    --accent-foreground: 230 38% 16%; /* primary-900 for contrast */
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 230 31% 27%; /* primary-700 */
+    --input: 230 31% 27%; /* primary-700 */
+    --ring: 229 83% 60%; /* primary-500 */
+
+    --chart-1: 229 83% 60%;
+    --chart-2: 46 65% 52%;
+    --chart-3: 225 79% 71%;
+    --chart-4: 51 100% 50%;
+    --chart-5: 227 81% 65%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
