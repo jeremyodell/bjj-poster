@@ -159,3 +159,77 @@ export interface AddTextOptions {
    */
   strictFont?: boolean;
 }
+
+// ============================================================================
+// Template Types
+// ============================================================================
+
+/**
+ * Background configuration for a template.
+ * Supports solid colors, gradients, or image files.
+ */
+export type TemplateBackground =
+  | { type: 'solid'; color: string }
+  | { type: 'gradient'; direction: GradientDirection; stops: GradientStop[] }
+  | { type: 'image'; path: string };
+
+/**
+ * A photo field in a template (e.g., athlete photo).
+ */
+export interface TemplatePhotoField {
+  /** Unique identifier for data binding (e.g., "athletePhoto") */
+  id: string;
+  /** Position on the canvas */
+  position: Position;
+  /** Target size for the photo */
+  size: { width: number; height: number };
+  /** Optional mask shape */
+  mask?: MaskShape;
+  /** Optional border */
+  border?: Border;
+  /** Optional drop shadow */
+  shadow?: Shadow;
+}
+
+/**
+ * A text field in a template with placeholder and styling.
+ */
+export interface TemplateTextField {
+  /** Unique identifier for data binding (e.g., "athleteName", "tournament") */
+  id: string;
+  /** Position on the canvas */
+  position: Position;
+  /** Text styling options */
+  style: TextStyle;
+  /** Placeholder text shown in previews */
+  placeholder?: string;
+}
+
+/**
+ * Complete poster template configuration.
+ */
+export interface PosterTemplate {
+  /** Unique template identifier */
+  id: string;
+  /** Human-readable template name */
+  name: string;
+  /** Template description */
+  description: string;
+  /** Semantic version of the template */
+  version: string;
+
+  /** Canvas dimensions */
+  canvas: {
+    width: number;
+    height: number;
+  };
+
+  /** Background configuration */
+  background: TemplateBackground;
+
+  /** Photo fields in the template */
+  photos: TemplatePhotoField[];
+
+  /** Text fields in the template */
+  text: TemplateTextField[];
+}

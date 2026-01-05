@@ -32,3 +32,26 @@ export class FontLoadError extends AppError {
     this.name = 'FontLoadError';
   }
 }
+
+/**
+ * Thrown when a template is not found
+ */
+export class TemplateNotFoundError extends AppError {
+  constructor(templateId: string) {
+    super(`Template not found: ${templateId}`, 404, 'TEMPLATE_NOT_FOUND');
+    this.name = 'TemplateNotFoundError';
+  }
+}
+
+/**
+ * Thrown when template validation fails
+ */
+export class TemplateValidationError extends AppError {
+  public readonly errors: string[];
+
+  constructor(errors: string[]) {
+    super(`Template validation failed: ${errors.join('; ')}`, 400, 'TEMPLATE_VALIDATION_ERROR');
+    this.name = 'TemplateValidationError';
+    this.errors = errors;
+  }
+}
