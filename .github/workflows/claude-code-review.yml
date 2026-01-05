@@ -1,0 +1,70 @@
+# Claude Code Review Action
+# Automatically reviews PRs using Claude
+# Requires ANTHROPIC_API_KEY secret in GitHub repo settings
+
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write  # Required for OIDC authentication
+  actions: read    # Required for Claude to read CI results
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    name: Claude Code Review
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          # Review configuration
+          review_mode: "diff"  # Only review changed files
+
+          # Comment settings
+          inline_comments: true
+          summary_comment: true
+
+          # Severity thresholds
+          # Only comment on issues with confidence >= threshold
+          confidence_threshold: 70
+
+          # Focus areas
+          focus_areas: |
+            - Security vulnerabilities
+            - Performance issues
+            - Code style and best practices
+            - Error handling
+            - Test coverage
+            - Documentation
+
+          # Custom instructions for this project
+          custom_instructions: |
+            This is a BJJ tournament poster generator using:
+            - pnpm monorepo with Turborepo
+            - AWS Lambda handlers in apps/api
+            - Next.js 14 frontend in apps/web
+            - DynamoDB single-table design via @bjj-poster/db
+            - TypeScript with explicit return types
+            Check for proper error handling using @bjj-poster/core error classes.
+            Ensure Lambda handlers follow the pattern in CLAUDE.md.
+
+      - name: Post Review Summary
+        if: always()
+        run: |
+          echo "## Claude Code Review Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Review has been posted as PR comments." >> $GITHUB_STEP_SUMMARY
