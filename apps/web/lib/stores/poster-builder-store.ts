@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 
+/** Valid BJJ belt ranks */
 export type BeltRank = 'white' | 'blue' | 'purple' | 'brown' | 'black';
 
 /** Form fields that can be set via setField (excludes athletePhoto and UI state) */
@@ -13,37 +14,65 @@ export type PosterFormField =
   | 'location';
 
 export interface PosterBuilderState {
-  // Form data
+  /** Athlete photo file (not persisted - File objects can't be serialized) */
   athletePhoto: File | null;
+  /** Athlete's display name */
   athleteName: string;
+  /** BJJ belt rank */
   beltRank: BeltRank;
+  /** Team/academy name */
   team: string;
+  /** Tournament name */
   tournament: string;
+  /** Event date (ISO string or display format) */
   date: string;
+  /** Event location */
   location: string;
+  /** Selected poster template ID */
   selectedTemplateId: string | null;
 
-  // UI state (not persisted)
+  /** Whether poster generation is in progress (not persisted) */
   isGenerating: boolean;
+  /** Generation progress percentage 0-100 (not persisted) */
   generationProgress: number;
+  /** Whether advanced options panel is shown (not persisted) */
   showAdvancedOptions: boolean;
+  /** Whether preview panel is shown (not persisted) */
   showPreview: boolean;
 }
 
 export interface PosterBuilderActions {
+  /**
+   * Sets the athlete photo file.
+   * NOTE: File objects are not persisted to localStorage.
+   */
   setPhoto: (file: File | null) => void;
   /**
-   * Updates a form field value. Use dedicated methods for UI state:
+   * Updates a form field value. Restricted to PosterFormField type for type safety.
+   * Use dedicated methods for other state:
    * - setPhoto() for athletePhoto
    * - setTemplate() for selectedTemplateId
    * - setGenerating() for isGenerating/generationProgress
    * - toggleAdvancedOptions()/togglePreview() for UI toggles
+   *
+   * VALIDATION NOTE: This store does not validate field values. Validation
+   * should be performed in the UI layer (form components) before calling
+   * this method.
    */
   setField: <K extends PosterFormField>(key: K, value: PosterBuilderState[K]) => void;
+  /** Sets the selected template ID */
   setTemplate: (templateId: string | null) => void;
+  /**
+   * Sets generation state.
+   * @param isGenerating - Whether generation is in progress
+   * @param progress - Progress percentage (0-100), defaults to 0
+   */
   setGenerating: (isGenerating: boolean, progress?: number) => void;
+  /** Toggles the advanced options panel visibility */
   toggleAdvancedOptions: () => void;
+  /** Toggles the preview panel visibility */
   togglePreview: () => void;
+  /** Resets all fields to initial defaults */
   reset: () => void;
 }
 
@@ -64,6 +93,20 @@ const initialState: PosterBuilderState = {
   showPreview: false,
 };
 
+/**
+ * Poster builder form state store.
+ *
+ * PERSISTENCE: Form data (athleteName, beltRank, team, tournament, date,
+ * location, selectedTemplateId) is persisted to localStorage under key
+ * 'poster-builder-draft'. This allows users to resume drafts across sessions.
+ *
+ * NOT PERSISTED:
+ * - athletePhoto: File objects cannot be serialized to JSON
+ * - UI state: isGenerating, generationProgress, showAdvancedOptions, showPreview
+ *
+ * HYDRATION: Uses skipHydration to prevent Next.js SSR mismatches. Call
+ * usePosterBuilderStore.persist.rehydrate() in a client-side useEffect.
+ */
 export const usePosterBuilderStore = create<PosterBuilderStore>()(
   devtools(
     persist(

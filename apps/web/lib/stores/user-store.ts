@@ -23,14 +23,25 @@ export interface UserActions {
    * - If same user changes tier (upgrade/downgrade), preserves postersThisMonth
    */
   setUser: (user: User | null, tier?: SubscriptionTier) => void;
-  /** Clears user session and resets all state to defaults (for logout) */
+  /**
+   * Clears user session and resets all state to defaults.
+   * Call this on logout.
+   */
   resetUser: () => void;
-  /** Returns true if user can create another poster based on subscription quota */
+  /**
+   * Returns true if user can create another poster based on subscription quota.
+   * NOTE: This is for UI feedback only. Server-side validation in the API
+   * is the authoritative source for quota enforcement.
+   */
   canCreatePoster: () => boolean;
   /**
    * Increments the monthly poster usage count.
-   * IMPORTANT: Caller should check canCreatePoster() first to prevent exceeding quota.
-   * Server-side validation should also enforce limits.
+   *
+   * IMPORTANT:
+   * - Caller should check canCreatePoster() first for UI feedback
+   * - This is not atomic; rapid calls could cause race conditions
+   * - Server is the authoritative source of truth for usage counts
+   * - Server-side validation MUST enforce limits independently
    */
   incrementUsage: () => void;
 }
@@ -53,6 +64,19 @@ const initialState: UserState = {
   postersLimit: TIER_LIMITS.free,
 };
 
+/**
+ * User session and subscription quota store.
+ *
+ * PERSISTENCE NOTE: This store intentionally does NOT persist to localStorage.
+ * User session state should be restored from the authentication provider on
+ * page load (e.g., via NextAuth, Clerk, or custom auth). The postersThisMonth
+ * count should be fetched from the server API, which is the authoritative
+ * source for quota tracking.
+ *
+ * SECURITY NOTE: Client-side quota checks (canCreatePoster) are for UI feedback
+ * only. The server API MUST independently validate quota limits. Never trust
+ * client-reported usage counts.
+ */
 export const useUserStore = create<UserStore>()(
   devtools(
     (set, get) => ({
