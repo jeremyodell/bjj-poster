@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Archivo_Black, DM_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+import { Providers } from './providers';
 
 const archivoBlack = Archivo_Black({
   weight: '400',
@@ -36,7 +37,9 @@ export default function RootLayout({
       lang="en"
       className={`${archivoBlack.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}
     >
-      <body className="font-body antialiased">{children}</body>
+      <body className="font-body antialiased">
+          <Providers>{children}</Providers>
+        </body>
     </html>
   );
 }
