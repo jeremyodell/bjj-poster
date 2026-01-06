@@ -18,9 +18,9 @@ describe('Landing Page', () => {
 
     it('renders the primary CTA button linking to signup', () => {
       render(<Home />);
-      const ctaButton = screen.getByRole('link', { name: /get started free/i });
-      expect(ctaButton).toBeInTheDocument();
-      expect(ctaButton).toHaveAttribute('href', '/auth/signup');
+      const ctaButtons = screen.getAllByRole('link', { name: /get started free/i });
+      expect(ctaButtons.length).toBeGreaterThanOrEqual(1);
+      expect(ctaButtons[0]).toHaveAttribute('href', '/auth/signup');
     });
 
     it('renders the free badge', () => {
