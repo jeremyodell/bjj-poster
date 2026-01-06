@@ -125,4 +125,51 @@ describe('Pricing Page', () => {
       expect(screen.getByText('$0')).toBeInTheDocument();
     });
   });
+
+  describe('CTAs', () => {
+    it('renders tier-specific CTA text', () => {
+      render(<PricingPage />);
+      expect(screen.getByRole('link', { name: /get started free/i })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /start pro trial/i })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /go premium/i })).toBeInTheDocument();
+    });
+
+    it('links to signup with correct plan query params', () => {
+      render(<PricingPage />);
+      expect(screen.getByRole('link', { name: /get started free/i })).toHaveAttribute(
+        'href',
+        '/auth/signup?plan=free'
+      );
+      expect(screen.getByRole('link', { name: /start pro trial/i })).toHaveAttribute(
+        'href',
+        '/auth/signup?plan=pro'
+      );
+      expect(screen.getByRole('link', { name: /go premium/i })).toHaveAttribute(
+        'href',
+        '/auth/signup?plan=premium'
+      );
+    });
+  });
+
+  describe('Accessibility', () => {
+    it('has proper heading hierarchy', () => {
+      render(<PricingPage />);
+      const h1 = screen.getByRole('heading', { level: 1 });
+      const h2s = screen.getAllByRole('heading', { level: 2 });
+      expect(h1).toBeInTheDocument();
+      expect(h2s.length).toBe(3);
+    });
+
+    it('feature lists have proper list role', () => {
+      render(<PricingPage />);
+      const lists = screen.getAllByRole('list');
+      expect(lists.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('icons are hidden from screen readers', () => {
+      render(<PricingPage />);
+      const svgs = document.querySelectorAll('svg[aria-hidden="true"]');
+      expect(svgs.length).toBeGreaterThan(0);
+    });
+  });
 });
