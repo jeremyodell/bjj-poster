@@ -1,7 +1,8 @@
 /**
- * Sentinel symbol for disabled queries - cannot collide with real user IDs
+ * Sentinel value for disabled queries - using unique string to avoid Symbol serialization issues
+ * String is JSON-serializable and works with DevTools/persistence
  */
-const DISABLED_USER = Symbol('disabled-user');
+const DISABLED_USER = '__DISABLED__' as const;
 
 /**
  * Query key factory for consistent cache key management
@@ -15,7 +16,7 @@ export const queryKeys = {
     all: ['posters'] as const,
     /**
      * Query key for user-specific poster history
-     * Uses Symbol sentinel when userId is undefined to prevent any possible collision
+     * Uses '__DISABLED__' sentinel when userId is undefined to prevent collision
      */
     byUser: (userId: string | undefined) =>
       userId

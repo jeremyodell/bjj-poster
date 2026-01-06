@@ -18,22 +18,23 @@ export class ApiError extends Error {
  * Wraps both HTTP errors and network failures in ApiError for consistent error handling
  */
 export async function apiFetch<T>(url: string): Promise<T> {
+  let response: Response;
+
   try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new ApiError(response.status, `API error: ${response.statusText}`);
-    }
-    return response.json();
+    response = await fetch(url);
   } catch (error) {
-    // Re-throw if already an ApiError
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    // Wrap network errors (CORS, timeout, no internet) in ApiError with cause for debugging
+    // Network errors (CORS, timeout, no internet)
     throw new ApiError(
       0,
       `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       { cause: error }
     );
   }
+
+  // HTTP errors (4xx, 5xx)
+  if (!response.ok) {
+    throw new ApiError(response.status, `API error: ${response.statusText}`);
+  }
+
+  return response.json();
 }
