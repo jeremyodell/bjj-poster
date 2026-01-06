@@ -83,4 +83,46 @@ describe('Pricing Page', () => {
       expect(monthTexts.length).toBe(3);
     });
   });
+
+  describe('Price Toggle Behavior', () => {
+    it('updates prices when switching to annual', async () => {
+      const user = userEvent.setup();
+      render(<PricingPage />);
+
+      // Verify monthly prices first
+      expect(screen.getByText('$9.99')).toBeInTheDocument();
+      expect(screen.getByText('$29.99')).toBeInTheDocument();
+
+      // Switch to annual
+      await user.click(screen.getByRole('radio', { name: /annual/i }));
+
+      // Verify annual prices
+      expect(screen.getByText('$7.99')).toBeInTheDocument();
+      expect(screen.getByText('$23.99')).toBeInTheDocument();
+    });
+
+    it('shows "Billed annually" text when annual is selected', async () => {
+      const user = userEvent.setup();
+      render(<PricingPage />);
+
+      expect(screen.queryByText(/billed annually/i)).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('radio', { name: /annual/i }));
+
+      // Pro and Premium should show billed annually (Free is $0)
+      const billedAnnually = screen.getAllByText(/billed annually/i);
+      expect(billedAnnually.length).toBe(2);
+    });
+
+    it('Free tier price stays $0 for both periods', async () => {
+      const user = userEvent.setup();
+      render(<PricingPage />);
+
+      expect(screen.getByText('$0')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('radio', { name: /annual/i }));
+
+      expect(screen.getByText('$0')).toBeInTheDocument();
+    });
+  });
 });
