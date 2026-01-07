@@ -17,3 +17,10 @@ export type {
 export { TemplateSelector } from './template-selector';
 export { AthleteInfoFields } from './athlete-info';
 export { TournamentInfoFields } from './tournament-info';
+export {
+  PosterBuilderForm,
+  GenerateButton,
+  FloatingPreviewButton,
+  PreviewModal,
+  PosterPreviewCanvas,
+} from './poster-builder-form';

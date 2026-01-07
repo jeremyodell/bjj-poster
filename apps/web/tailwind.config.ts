@@ -66,6 +66,15 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      animation: {
+        'pulse-subtle': 'pulse-subtle 2s ease-in-out infinite',
+      },
+      keyframes: {
+        'pulse-subtle': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(67, 97, 238, 0.4)' },
+          '50%': { boxShadow: '0 0 0 8px rgba(67, 97, 238, 0)' },
+        },
+      },
     },
   },
   plugins: [require('tailwindcss-animate')],

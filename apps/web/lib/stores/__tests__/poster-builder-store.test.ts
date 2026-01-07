@@ -1,7 +1,13 @@
 import { act } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { usePosterBuilderStore } from '../poster-builder-store';
+import { generatePoster } from '@/lib/api/generate-poster';
+
+// Mock the API
+vi.mock('@/lib/api/generate-poster', () => ({
+  generatePoster: vi.fn(),
+}));
 
 describe('usePosterBuilderStore', () => {
   beforeEach(() => {
@@ -310,6 +316,119 @@ describe('usePosterBuilderStore', () => {
       expect(parsed.state.athleteName).toBe('Form User');
       expect(parsed.state.beltRank).toBe('brown');
       expect(parsed.state.selectedTemplateId).toBe('template-123');
+    });
+  });
+
+  describe('generatePoster action', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(generatePoster).mockResolvedValue({
+        posterId: 'mock-id',
+        imageUrl: '/mock.png',
+        createdAt: '2026-01-07T00:00:00.000Z',
+      });
+    });
+
+    it('sets isGenerating to true while generating', async () => {
+      // Setup valid form data
+      act(() => {
+        usePosterBuilderStore.getState().setPhoto(new File([''], 'photo.jpg'));
+        usePosterBuilderStore.getState().setField('athleteName', 'John');
+        usePosterBuilderStore.getState().setField('beltRank', 'purple');
+        usePosterBuilderStore.getState().setField('tournament', 'Worlds');
+        usePosterBuilderStore.getState().setTemplate('template-1');
+      });
+
+      const promise = usePosterBuilderStore.getState().generatePoster();
+
+      expect(usePosterBuilderStore.getState().isGenerating).toBe(true);
+
+      await act(async () => {
+        await promise;
+      });
+
+      expect(usePosterBuilderStore.getState().isGenerating).toBe(false);
+    });
+
+    it('calls API with correct request data', async () => {
+      const mockFile = new File([''], 'photo.jpg', { type: 'image/jpeg' });
+
+      act(() => {
+        usePosterBuilderStore.getState().setPhoto(mockFile);
+        usePosterBuilderStore.getState().setField('athleteName', 'Jane Doe');
+        usePosterBuilderStore.getState().setField('beltRank', 'brown');
+        usePosterBuilderStore.getState().setField('team', 'Alliance');
+        usePosterBuilderStore.getState().setField('tournament', 'Pan Ams');
+        usePosterBuilderStore.getState().setField('date', '2026-03-15');
+        usePosterBuilderStore.getState().setField('location', 'Irvine');
+        usePosterBuilderStore.getState().setTemplate('template-2');
+      });
+
+      await act(async () => {
+        await usePosterBuilderStore.getState().generatePoster();
+      });
+
+      expect(generatePoster).toHaveBeenCalledWith(
+        {
+          athletePhoto: mockFile,
+          athleteName: 'Jane Doe',
+          beltRank: 'brown',
+          team: 'Alliance',
+          tournament: 'Pan Ams',
+          date: '2026-03-15',
+          location: 'Irvine',
+          templateId: 'template-2',
+        },
+        expect.any(Function)
+      );
+    });
+
+    it('returns generated poster data on success', async () => {
+      act(() => {
+        usePosterBuilderStore.getState().setPhoto(new File([''], 'photo.jpg'));
+        usePosterBuilderStore.getState().setField('athleteName', 'John');
+        usePosterBuilderStore.getState().setField('beltRank', 'blue');
+        usePosterBuilderStore.getState().setField('tournament', 'Worlds');
+        usePosterBuilderStore.getState().setTemplate('template-1');
+      });
+
+      let result;
+      await act(async () => {
+        result = await usePosterBuilderStore.getState().generatePoster();
+      });
+
+      expect(result).toEqual({
+        posterId: 'mock-id',
+        imageUrl: '/mock.png',
+        createdAt: '2026-01-07T00:00:00.000Z',
+      });
+    });
+
+    it('throws error if required fields are missing', async () => {
+      // Don't set any fields
+      await expect(
+        usePosterBuilderStore.getState().generatePoster()
+      ).rejects.toThrow('Missing required fields');
+    });
+
+    it('resets isGenerating on error', async () => {
+      vi.mocked(generatePoster).mockRejectedValue(new Error('API Error'));
+
+      act(() => {
+        usePosterBuilderStore.getState().setPhoto(new File([''], 'photo.jpg'));
+        usePosterBuilderStore.getState().setField('athleteName', 'John');
+        usePosterBuilderStore.getState().setField('beltRank', 'blue');
+        usePosterBuilderStore.getState().setField('tournament', 'Worlds');
+        usePosterBuilderStore.getState().setTemplate('template-1');
+      });
+
+      await expect(
+        act(async () => {
+          await usePosterBuilderStore.getState().generatePoster();
+        })
+      ).rejects.toThrow('API Error');
+
+      expect(usePosterBuilderStore.getState().isGenerating).toBe(false);
     });
   });
 });
