@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/heic', 'image/heif'];
