@@ -48,6 +48,19 @@ describe('athleteInfoSchema', () => {
 
       expect(result.success).toBe(false);
     });
+
+    it('transforms to trimmed value on output', () => {
+      const result = athleteInfoSchema.safeParse({
+        athleteName: '  John Doe  ',
+        beltRank: 'white',
+        team: '',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.athleteName).toBe('John Doe');
+      }
+    });
   });
 
   describe('beltRank', () => {
@@ -108,6 +121,19 @@ describe('athleteInfoSchema', () => {
       });
 
       expect(result.success).toBe(true);
+    });
+
+    it('transforms to trimmed value on output', () => {
+      const result = athleteInfoSchema.safeParse({
+        athleteName: 'John',
+        beltRank: 'white',
+        team: '  Alliance  ',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.team).toBe('Alliance');
+      }
     });
   });
 });

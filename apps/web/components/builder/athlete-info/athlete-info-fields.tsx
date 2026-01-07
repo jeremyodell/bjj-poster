@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -12,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { usePosterBuilderStore, type BeltRank } from '@/lib/stores';
+import { useDebouncedStoreSync } from '@/lib/hooks/use-debounced-store-sync';
 import {
   athleteInfoSchema,
   MAX_NAME_LENGTH,
@@ -39,11 +41,15 @@ const BELT_OPTIONS = [
 const DEBOUNCE_MS = 300;
 
 export function AthleteInfoFields(): React.ReactElement {
-  // Get state and actions from store
-  const storeAthleteName = usePosterBuilderStore((state) => state.athleteName);
-  const storeBeltRank = usePosterBuilderStore((state) => state.beltRank);
-  const storeTeam = usePosterBuilderStore((state) => state.team);
-  const setField = usePosterBuilderStore((state) => state.setField);
+  // Get state and actions from store with shallow comparison
+  const { storeAthleteName, storeBeltRank, storeTeam, setField } = usePosterBuilderStore(
+    useShallow((state) => ({
+      storeAthleteName: state.athleteName,
+      storeBeltRank: state.beltRank,
+      storeTeam: state.team,
+      setField: state.setField,
+    }))
+  );
 
   // Local state for immediate UI updates
   const [athleteName, setAthleteName] = useState(storeAthleteName);
@@ -79,40 +85,33 @@ export function AthleteInfoFields(): React.ReactElement {
     setBeltRank(storeBeltRank);
   }, [storeBeltRank]);
 
-  // Debounced sync to store for athlete name (only sync valid data)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (athleteName !== storeAthleteName) {
-        const error = validateField('athleteName', athleteName);
-        if (!error) {
-          setField('athleteName', athleteName);
-        }
-      }
-    }, DEBOUNCE_MS);
+  // Debounced sync to store for athlete name
+  useDebouncedStoreSync(
+    athleteName,
+    storeAthleteName,
+    useCallback((value: string) => setField('athleteName', value), [setField]),
+    {
+      delayMs: DEBOUNCE_MS,
+      validate: useCallback((value: string) => validateField('athleteName', value), [validateField]),
+    }
+  );
 
-    return () => clearTimeout(timer);
-  }, [athleteName, storeAthleteName, setField, validateField]);
+  // Debounced sync to store for team
+  useDebouncedStoreSync(
+    team,
+    storeTeam,
+    useCallback((value: string) => setField('team', value), [setField]),
+    {
+      delayMs: DEBOUNCE_MS,
+      validate: useCallback((value: string) => validateField('team', value), [validateField]),
+    }
+  );
 
-  // Debounced sync to store for team (only sync valid data)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (team !== storeTeam) {
-        const error = validateField('team', team);
-        if (!error) {
-          setField('team', team);
-        }
-      }
-    }, DEBOUNCE_MS);
-
-    return () => clearTimeout(timer);
-  }, [team, storeTeam, setField, validateField]);
-
-  // Handler for athlete name input - clears error optimistically when typing
+  // Optimistically clear error for valid input
   const handleAthleteNameChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       setAthleteName(value);
-      // Clear error when user starts typing valid input
       if (errors.athleteName && value.trim().length > 0 && value.length <= MAX_NAME_LENGTH) {
         setErrors((prev) => ({ ...prev, athleteName: undefined }));
       }
@@ -120,18 +119,17 @@ export function AthleteInfoFields(): React.ReactElement {
     [errors.athleteName]
   );
 
-  // Handler for athlete name blur - validates on blur
+  // Validate on blur
   const handleAthleteNameBlur = useCallback(() => {
     const error = validateField('athleteName', athleteName);
     setErrors((prev) => ({ ...prev, athleteName: error }));
   }, [athleteName, validateField]);
 
-  // Handler for team input - clears error optimistically when typing
+  // Optimistically clear error for valid input
   const handleTeamChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       setTeam(value);
-      // Clear error when user starts typing valid input (team is optional, so only max length matters)
       if (errors.team && value.length <= MAX_TEAM_LENGTH) {
         setErrors((prev) => ({ ...prev, team: undefined }));
       }
@@ -139,13 +137,13 @@ export function AthleteInfoFields(): React.ReactElement {
     [errors.team]
   );
 
-  // Handler for team blur - validates on blur
+  // Validate on blur
   const handleTeamBlur = useCallback(() => {
     const error = validateField('team', team);
     setErrors((prev) => ({ ...prev, team: error }));
   }, [team, validateField]);
 
-  // Handler for belt rank - updates immediately (no debounce)
+  // Belt rank updates immediately (no debounce)
   const handleBeltRankChange = useCallback(
     (value: string) => {
       const beltValue = value as BeltRank;

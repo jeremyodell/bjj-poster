@@ -252,6 +252,55 @@ describe('AthleteInfoFields', () => {
 
       vi.useRealTimers();
     });
+
+    it('only syncs final value during rapid typing', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({
+        advanceTimers: (delay) => vi.advanceTimersByTime(delay),
+      });
+      const mockSetField = vi.fn();
+
+      vi.mocked(usePosterBuilderStore).mockImplementation((selector) => {
+        const state = createMockState({ setField: mockSetField });
+        return selector ? selector(state) : state;
+      });
+
+      render(<AthleteInfoFields />);
+
+      const input = screen.getByLabelText(/athlete name/i);
+
+      // Type rapidly - each keystroke resets the debounce timer
+      await user.type(input, 'J');
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+      });
+
+      await user.type(input, 'o');
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+      });
+
+      await user.type(input, 'h');
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+      });
+
+      await user.type(input, 'n');
+
+      // No sync yet - debounce hasn't completed
+      expect(mockSetField).not.toHaveBeenCalled();
+
+      // Wait for debounce to complete
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+
+      // Only the final value should be synced
+      expect(mockSetField).toHaveBeenCalledTimes(1);
+      expect(mockSetField).toHaveBeenCalledWith('athleteName', 'John');
+
+      vi.useRealTimers();
+    });
   });
 
   describe('validation', () => {
