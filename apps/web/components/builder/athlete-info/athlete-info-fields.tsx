@@ -40,6 +40,10 @@ const BELT_OPTIONS = [
 /** Debounce delay in milliseconds for text field updates */
 const DEBOUNCE_MS = 300;
 
+/**
+ * Form fields for athlete information (name, belt rank, team).
+ * Features debounced auto-save, real-time validation, and accessibility support.
+ */
 export function AthleteInfoFields(): React.ReactElement {
   // Get state and actions from store with shallow comparison
   const { storeAthleteName, storeBeltRank, storeTeam, setField } = usePosterBuilderStore(
@@ -125,7 +129,8 @@ export function AthleteInfoFields(): React.ReactElement {
     setErrors((prev) => ({ ...prev, athleteName: error }));
   }, [athleteName, validateField]);
 
-  // Optimistically clear error for valid input
+  // Team is optional, so we only check length for optimistic error clearing.
+  // Whitespace-only input is valid for team (unlike athleteName which requires content).
   const handleTeamChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;

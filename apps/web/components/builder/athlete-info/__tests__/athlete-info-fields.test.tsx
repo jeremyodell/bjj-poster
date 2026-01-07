@@ -386,5 +386,29 @@ describe('AthleteInfoFields', () => {
       expect(errorId).toBeTruthy();
       expect(document.getElementById(errorId!)).toHaveTextContent('Athlete name is required');
     });
+
+    it('shows errors for multiple invalid fields simultaneously', async () => {
+      const user = userEvent.setup();
+      render(<AthleteInfoFields />);
+
+      const nameInput = screen.getByLabelText(/athlete name/i);
+      const teamInput = screen.getByLabelText(/team/i);
+
+      // Leave name empty, trigger blur
+      await user.click(nameInput);
+      await user.tab();
+
+      // Add too-long team
+      await user.type(teamInput, 'A'.repeat(51));
+      await user.tab();
+
+      // Both errors should be visible
+      expect(screen.getByText('Athlete name is required')).toBeInTheDocument();
+      expect(screen.getByText('Team must be 50 characters or less')).toBeInTheDocument();
+
+      // Both inputs should have aria-invalid
+      expect(nameInput).toHaveAttribute('aria-invalid', 'true');
+      expect(teamInput).toHaveAttribute('aria-invalid', 'true');
+    });
   });
 });
