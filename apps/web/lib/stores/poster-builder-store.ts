@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 
+import {
+  generatePoster as generatePosterApi,
+  type GeneratePosterResponse,
+} from '@/lib/api/generate-poster';
+
 /** Valid BJJ belt ranks */
 export type BeltRank = 'white' | 'blue' | 'purple' | 'brown' | 'black' | 'red-black' | 'red';
 
@@ -74,6 +79,12 @@ export interface PosterBuilderActions {
   togglePreview: () => void;
   /** Resets all fields to initial defaults */
   reset: () => void;
+  /**
+   * Generates a poster using the current form data.
+   * @throws Error if required fields are missing
+   * @returns The generated poster response
+   */
+  generatePoster: () => Promise<GeneratePosterResponse>;
 }
 
 export type PosterBuilderStore = PosterBuilderState & PosterBuilderActions;
@@ -110,7 +121,7 @@ const initialState: PosterBuilderState = {
 export const usePosterBuilderStore = create<PosterBuilderStore>()(
   devtools(
     persist(
-      (set) => ({
+      (set, get) => ({
         ...initialState,
 
         setPhoto: (file) => set({ athletePhoto: file }),
@@ -132,6 +143,45 @@ export const usePosterBuilderStore = create<PosterBuilderStore>()(
           set((state) => ({ showPreview: !state.showPreview })),
 
         reset: () => set(initialState),
+
+        generatePoster: async () => {
+          const state = get();
+
+          // Validate required fields
+          if (
+            !state.athletePhoto ||
+            !state.athleteName.trim() ||
+            !state.beltRank ||
+            !state.tournament.trim() ||
+            !state.selectedTemplateId
+          ) {
+            throw new Error('Missing required fields');
+          }
+
+          set({ isGenerating: true, generationProgress: 0 });
+
+          try {
+            const result = await generatePosterApi(
+              {
+                athletePhoto: state.athletePhoto,
+                athleteName: state.athleteName,
+                beltRank: state.beltRank,
+                team: state.team || undefined,
+                tournament: state.tournament,
+                date: state.date || undefined,
+                location: state.location || undefined,
+                templateId: state.selectedTemplateId,
+              },
+              (progress) => set({ generationProgress: progress })
+            );
+
+            set({ isGenerating: false, generationProgress: 0 });
+            return result;
+          } catch (error) {
+            set({ isGenerating: false, generationProgress: 0 });
+            throw error;
+          }
+        },
       }),
       {
         name: 'poster-builder-draft',
