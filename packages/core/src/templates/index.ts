@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import { PosterTemplateSchema } from './schema.js';
 import { TemplateNotFoundError } from './errors.js';
 import { classicTemplate } from './classic.js';
@@ -12,8 +13,9 @@ export type {
   TemplatePhotoField,
   TemplateBackground,
 } from './types.js';
+export type { PosterTemplateInput } from './schema.js';
 export { TemplateNotFoundError, TemplateValidationError } from './errors.js';
-export { PosterTemplateSchema } from './schema.js';
+export { PosterTemplateSchema, ColorSchema } from './schema.js';
 
 /**
  * Registry of bundled templates
@@ -79,6 +81,8 @@ export function listTemplates(): Array<{ id: string; name: string; description: 
  * }
  * ```
  */
-export function validateTemplate(template: unknown) {
+export function validateTemplate(
+  template: unknown
+): z.SafeParseReturnType<z.input<typeof PosterTemplateSchema>, z.output<typeof PosterTemplateSchema>> {
   return PosterTemplateSchema.safeParse(template);
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PosterTemplateSchema } from '../schema.js';
+import { PosterTemplateSchema, ColorSchema } from '../schema.js';
 
 describe('PosterTemplateSchema', () => {
   const validTemplate = {
@@ -114,5 +114,57 @@ describe('PosterTemplateSchema', () => {
     };
     const result = PosterTemplateSchema.safeParse(invalid);
     expect(result.success).toBe(false);
+  });
+
+  it('should reject invalid color format in background', () => {
+    const invalid = { ...validTemplate, background: { type: 'solid', color: 'invalid-color' } };
+    const result = PosterTemplateSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject invalid color format in text style', () => {
+    const invalid = {
+      ...validTemplate,
+      text: [
+        {
+          id: 'athleteName',
+          position: { anchor: 'center', offsetX: 0, offsetY: 300 },
+          style: {
+            fontFamily: 'Montserrat-Bold',
+            fontSize: 64,
+            color: 'red', // Invalid - should be hex or rgba
+          },
+        },
+      ],
+    };
+    const result = PosterTemplateSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject version with too many digits', () => {
+    const invalid = { ...validTemplate, version: '1000.0.0' };
+    const result = PosterTemplateSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('ColorSchema', () => {
+  it('should accept valid 6-char hex colors', () => {
+    expect(ColorSchema.safeParse('#ff5733').success).toBe(true);
+    expect(ColorSchema.safeParse('#FFFFFF').success).toBe(true);
+    expect(ColorSchema.safeParse('#000000').success).toBe(true);
+  });
+
+  it('should accept valid rgba colors', () => {
+    expect(ColorSchema.safeParse('rgba(0,0,0,0.5)').success).toBe(true);
+    expect(ColorSchema.safeParse('rgba(255, 255, 255, 1)').success).toBe(true);
+    expect(ColorSchema.safeParse('rgb(100,100,100)').success).toBe(true);
+  });
+
+  it('should reject invalid color formats', () => {
+    expect(ColorSchema.safeParse('red').success).toBe(false);
+    expect(ColorSchema.safeParse('#fff').success).toBe(false); // 3-char hex not supported
+    expect(ColorSchema.safeParse('invalid').success).toBe(false);
+    expect(ColorSchema.safeParse('').success).toBe(false);
   });
 });

@@ -1,9 +1,22 @@
 import type { PosterTemplate } from './types.js';
 
 /**
+ * Deep freeze an object to prevent mutations
+ */
+function deepFreeze<T extends object>(obj: T): Readonly<T> {
+  Object.keys(obj).forEach((key) => {
+    const value = (obj as Record<string, unknown>)[key];
+    if (value && typeof value === 'object') {
+      deepFreeze(value as object);
+    }
+  });
+  return Object.freeze(obj);
+}
+
+/**
  * Classic template - traditional tournament poster with centered photo and bold text
  */
-export const classicTemplate: PosterTemplate = {
+export const classicTemplate: Readonly<PosterTemplate> = deepFreeze({
   id: 'classic',
   name: 'Classic',
   description: 'Traditional tournament poster with centered photo and bold text',
@@ -73,4 +86,4 @@ export const classicTemplate: PosterTemplate = {
       placeholder: 'January 2026',
     },
   ],
-};
+});
