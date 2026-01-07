@@ -95,4 +95,63 @@ describe('usePhotoUpload', () => {
       expect(result.current.error).toBe('File must be JPG, PNG, or HEIC');
     });
   });
+
+  describe('clear', () => {
+    it('resets all state', async () => {
+      const { result } = renderHook(() => usePhotoUpload());
+      const file = createMockFile('photo.jpg', 1024, 'image/jpeg');
+
+      await act(async () => {
+        await result.current.handleFile(file);
+      });
+
+      expect(result.current.file).not.toBeNull();
+
+      act(() => {
+        result.current.clear();
+      });
+
+      expect(result.current.file).toBeNull();
+      expect(result.current.preview).toBeNull();
+      expect(result.current.error).toBeNull();
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it('revokes object URL on clear', async () => {
+      const { result } = renderHook(() => usePhotoUpload());
+      const file = createMockFile('photo.jpg', 1024, 'image/jpeg');
+
+      await act(async () => {
+        await result.current.handleFile(file);
+      });
+
+      act(() => {
+        result.current.clear();
+      });
+
+      expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+    });
+  });
+
+  describe('URL cleanup', () => {
+    it('revokes previous URL when uploading new file', async () => {
+      const { result } = renderHook(() => usePhotoUpload());
+      const file1 = createMockFile('photo1.jpg', 1024, 'image/jpeg');
+      const file2 = createMockFile('photo2.jpg', 1024, 'image/jpeg');
+
+      mockCreateObjectURL.mockReturnValueOnce('blob:url-1');
+      mockCreateObjectURL.mockReturnValueOnce('blob:url-2');
+
+      await act(async () => {
+        await result.current.handleFile(file1);
+      });
+
+      await act(async () => {
+        await result.current.handleFile(file2);
+      });
+
+      expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:url-1');
+      expect(result.current.preview).toBe('blob:url-2');
+    });
+  });
 });

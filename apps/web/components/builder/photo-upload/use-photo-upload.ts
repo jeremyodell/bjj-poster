@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/heic'];
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
@@ -17,10 +17,17 @@ export function usePhotoUpload(): UsePhotoUploadReturn {
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const previewUrlRef = useRef<string | null>(null);
 
   const handleFile = useCallback(async (newFile: File): Promise<void> => {
     setError(null);
     setIsLoading(true);
+
+    // Revoke previous preview URL to prevent memory leaks
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
 
     try {
       // Validate file type
@@ -41,6 +48,7 @@ export function usePhotoUpload(): UsePhotoUploadReturn {
 
       // Create preview URL
       const previewUrl = URL.createObjectURL(newFile);
+      previewUrlRef.current = previewUrl;
       setFile(newFile);
       setPreview(previewUrl);
     } finally {
@@ -49,14 +57,15 @@ export function usePhotoUpload(): UsePhotoUploadReturn {
   }, []);
 
   const clear = useCallback((): void => {
-    if (preview) {
-      URL.revokeObjectURL(preview);
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
     }
     setFile(null);
     setPreview(null);
     setError(null);
     setIsLoading(false);
-  }, [preview]);
+  }, []);
 
   return { file, preview, error, isLoading, handleFile, clear };
 }
