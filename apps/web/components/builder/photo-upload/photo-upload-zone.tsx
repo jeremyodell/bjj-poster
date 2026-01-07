@@ -15,8 +15,7 @@ export function PhotoUploadZone({
   className,
 }: PhotoUploadZoneProps): JSX.Element {
   const setPhoto = usePosterBuilderStore((state) => state.setPhoto);
-  const { file, preview, error, isLoading, handleFile, clear } =
-    usePhotoUpload();
+  const { preview, error, isLoading, handleFile, clear } = usePhotoUpload();
 
   const handleCropComplete = useCallback(
     (croppedFile: File): void => {
