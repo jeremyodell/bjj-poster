@@ -14,3 +14,4 @@ export type {
   ImageCropperProps,
   UsePhotoUploadReturn,
 } from './photo-upload';
+export { TemplateSelector } from './template-selector';
