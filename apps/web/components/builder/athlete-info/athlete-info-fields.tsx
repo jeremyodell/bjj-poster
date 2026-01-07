@@ -9,6 +9,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+
+/** Belt rank configuration with display names and colors */
+const BELT_OPTIONS = [
+  { value: 'white', label: 'White', colorClass: 'bg-gray-100 border border-gray-300' },
+  { value: 'blue', label: 'Blue', colorClass: 'bg-blue-600' },
+  { value: 'purple', label: 'Purple', colorClass: 'bg-purple-600' },
+  { value: 'brown', label: 'Brown', colorClass: 'bg-amber-800' },
+  { value: 'black', label: 'Black', colorClass: 'bg-black' },
+  { value: 'red-black', label: 'Red/Black', colorClass: 'bg-gradient-to-r from-red-600 to-black' },
+  { value: 'red', label: 'Red', colorClass: 'bg-red-600' },
+] as const;
 
 export function AthleteInfoFields(): React.ReactElement {
   return (
@@ -36,13 +48,18 @@ export function AthleteInfoFields(): React.ReactElement {
             <SelectValue placeholder="Select belt rank" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="white">White</SelectItem>
-            <SelectItem value="blue">Blue</SelectItem>
-            <SelectItem value="purple">Purple</SelectItem>
-            <SelectItem value="brown">Brown</SelectItem>
-            <SelectItem value="black">Black</SelectItem>
-            <SelectItem value="red-black">Red/Black</SelectItem>
-            <SelectItem value="red">Red</SelectItem>
+            {BELT_OPTIONS.map((belt) => (
+              <SelectItem key={belt.value} value={belt.value}>
+                <div className="flex items-center gap-2">
+                  <span
+                    data-testid="belt-color"
+                    className={cn('h-3 w-3 rounded-full shrink-0', belt.colorClass)}
+                    aria-hidden="true"
+                  />
+                  <span>{belt.label}</span>
+                </div>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
