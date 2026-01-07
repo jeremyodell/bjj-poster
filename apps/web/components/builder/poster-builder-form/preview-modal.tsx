@@ -23,13 +23,19 @@ export function PreviewModal(): JSX.Element | null {
   const touchStartY = useRef<number>(0);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
+    const touch = e.touches[0];
+    if (touch) {
+      touchStartY.current = touch.clientY;
+    }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    const deltaY = e.changedTouches[0].clientY - touchStartY.current;
-    if (deltaY > 100) {
-      togglePreview();
+    const touch = e.changedTouches[0];
+    if (touch) {
+      const deltaY = touch.clientY - touchStartY.current;
+      if (deltaY > 100) {
+        togglePreview();
+      }
     }
   };
 
