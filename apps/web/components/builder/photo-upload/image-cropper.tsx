@@ -70,6 +70,7 @@ export function ImageCropper({
           onChange={(c) => setCrop(c)}
           onComplete={(c) => setCompletedCrop(c)}
         >
+          {/* eslint-disable-next-line @next/next/no-img-element -- react-image-crop requires native img element */}
           <img
             ref={imgRef}
             src={preview}
