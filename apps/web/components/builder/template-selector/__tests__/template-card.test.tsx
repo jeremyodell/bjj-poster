@@ -50,4 +50,30 @@ describe('TemplateCard', () => {
     await user.click(screen.getByRole('button'));
     expect(onSelect).toHaveBeenCalledWith('tpl-001');
   });
+
+  it('shows selected state with ring and checkmark when selected', () => {
+    render(
+      <TemplateCard
+        template={mockTemplate}
+        isSelected={true}
+        onSelect={vi.fn()}
+      />
+    );
+
+    const button = screen.getByRole('button');
+    expect(button).toHaveClass('ring-2', 'ring-primary-500');
+    expect(screen.getByTestId('checkmark-icon')).toBeInTheDocument();
+  });
+
+  it('does not show checkmark when not selected', () => {
+    render(
+      <TemplateCard
+        template={mockTemplate}
+        isSelected={false}
+        onSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId('checkmark-icon')).not.toBeInTheDocument();
+  });
 });
