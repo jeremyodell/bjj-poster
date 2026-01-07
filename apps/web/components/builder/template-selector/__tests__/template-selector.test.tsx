@@ -23,14 +23,14 @@ const mockTemplates = [
   { id: 'tpl-004', name: 'Kids', category: 'kids', thumbnailUrl: '/4.png' },
 ];
 
-const createWrapper = () => {
+function TestWrapper({ children }: { children: React.ReactNode }): JSX.Element {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return ({ children }: { children: React.ReactNode }) => (
+  return (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
-};
+}
 
 describe('TemplateSelector', () => {
   beforeEach(() => {
@@ -50,7 +50,7 @@ describe('TemplateSelector', () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useTemplates>);
 
-    render(<TemplateSelector />, { wrapper: createWrapper() });
+    render(<TemplateSelector />, { wrapper: TestWrapper });
 
     const skeletons = screen.getAllByTestId('template-skeleton');
     expect(skeletons.length).toBeGreaterThan(0);
@@ -65,7 +65,7 @@ describe('TemplateSelector', () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useTemplates>);
 
-    render(<TemplateSelector />, { wrapper: createWrapper() });
+    render(<TemplateSelector />, { wrapper: TestWrapper });
 
     expect(screen.getByText('Failed to load templates')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe('TemplateSelector', () => {
       refetch,
     } as unknown as ReturnType<typeof useTemplates>);
 
-    render(<TemplateSelector />, { wrapper: createWrapper() });
+    render(<TemplateSelector />, { wrapper: TestWrapper });
 
     await userEvent.click(screen.getByRole('button', { name: /retry/i }));
     expect(refetch).toHaveBeenCalled();
@@ -96,7 +96,7 @@ describe('TemplateSelector', () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useTemplates>);
 
-    render(<TemplateSelector />, { wrapper: createWrapper() });
+    render(<TemplateSelector />, { wrapper: TestWrapper });
 
     expect(screen.getByText('Recommended for you')).toBeInTheDocument();
     expect(screen.getByText('Classic')).toBeInTheDocument();
@@ -113,7 +113,7 @@ describe('TemplateSelector', () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useTemplates>);
 
-    render(<TemplateSelector />, { wrapper: createWrapper() });
+    render(<TemplateSelector />, { wrapper: TestWrapper });
 
     const browseButton = screen.getByRole('button', { name: /browse all templates/i });
     expect(browseButton).toBeInTheDocument();
@@ -137,7 +137,7 @@ describe('TemplateSelector', () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useTemplates>);
 
-    render(<TemplateSelector />, { wrapper: createWrapper() });
+    render(<TemplateSelector />, { wrapper: TestWrapper });
 
     const browseButton = screen.getByRole('button', { name: /browse all templates/i });
 
@@ -159,7 +159,7 @@ describe('TemplateSelector', () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useTemplates>);
 
-    render(<TemplateSelector />, { wrapper: createWrapper() });
+    render(<TemplateSelector />, { wrapper: TestWrapper });
 
     // Expand browse all
     await userEvent.click(screen.getByRole('button', { name: /browse all templates/i }));
@@ -184,7 +184,7 @@ describe('TemplateSelector', () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useTemplates>);
 
-    render(<TemplateSelector />, { wrapper: createWrapper() });
+    render(<TemplateSelector />, { wrapper: TestWrapper });
 
     // Expand and filter
     await userEvent.click(screen.getByRole('button', { name: /browse all templates/i }));
@@ -212,7 +212,7 @@ describe('TemplateSelector', () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useTemplates>);
 
-    render(<TemplateSelector />, { wrapper: createWrapper() });
+    render(<TemplateSelector />, { wrapper: TestWrapper });
 
     await userEvent.click(screen.getByText('Classic'));
     expect(setTemplate).toHaveBeenCalledWith('tpl-001');
@@ -232,7 +232,7 @@ describe('TemplateSelector', () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useTemplates>);
 
-    render(<TemplateSelector />, { wrapper: createWrapper() });
+    render(<TemplateSelector />, { wrapper: TestWrapper });
 
     expect(screen.getByTestId('checkmark-icon')).toBeInTheDocument();
   });
