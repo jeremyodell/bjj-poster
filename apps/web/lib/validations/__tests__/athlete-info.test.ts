@@ -12,7 +12,7 @@ describe('athleteInfoSchema', () => {
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.issues[0].message).toBe('Athlete name is required');
+        expect(result.error.issues[0]?.message).toBe('Athlete name is required');
       }
     });
 
@@ -25,7 +25,7 @@ describe('athleteInfoSchema', () => {
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.issues[0].message).toBe('Name must be 50 characters or less');
+        expect(result.error.issues[0]?.message).toBe('Name must be 50 characters or less');
       }
     });
 
@@ -96,7 +96,7 @@ describe('athleteInfoSchema', () => {
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.issues[0].message).toBe('Team must be 50 characters or less');
+        expect(result.error.issues[0]?.message).toBe('Team must be 50 characters or less');
       }
     });
 

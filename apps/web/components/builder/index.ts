@@ -15,3 +15,4 @@ export type {
   UsePhotoUploadReturn,
 } from './photo-upload';
 export { TemplateSelector } from './template-selector';
+export { AthleteInfoFields } from './athlete-info';

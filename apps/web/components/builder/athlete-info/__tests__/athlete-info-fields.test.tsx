@@ -4,15 +4,33 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AthleteInfoFields } from '../athlete-info-fields';
 import { usePosterBuilderStore } from '@/lib/stores';
 
-// Mock the store
+// Mock the store - include all required state properties
+const createMockState = (overrides = {}) => ({
+  athletePhoto: null,
+  athleteName: '',
+  beltRank: 'white' as const,
+  team: '',
+  tournament: '',
+  date: '',
+  location: '',
+  selectedTemplateId: null,
+  isGenerating: false,
+  generationProgress: 0,
+  showAdvancedOptions: false,
+  showPreview: false,
+  setPhoto: vi.fn(),
+  setField: vi.fn(),
+  setTemplate: vi.fn(),
+  setGenerating: vi.fn(),
+  toggleAdvancedOptions: vi.fn(),
+  togglePreview: vi.fn(),
+  reset: vi.fn(),
+  ...overrides,
+});
+
 vi.mock('@/lib/stores', () => ({
   usePosterBuilderStore: vi.fn((selector) => {
-    const state = {
-      athleteName: '',
-      beltRank: 'white',
-      team: '',
-      setField: vi.fn(),
-    };
+    const state = createMockState();
     return selector ? selector(state) : state;
   }),
 }));
@@ -87,12 +105,11 @@ describe('AthleteInfoFields', () => {
     it('initializes fields from store values', () => {
       // Override mock for this test
       vi.mocked(usePosterBuilderStore).mockImplementation((selector) => {
-        const state = {
+        const state = createMockState({
           athleteName: 'John Doe',
-          beltRank: 'purple',
+          beltRank: 'purple' as const,
           team: 'Gracie Barra',
-          setField: vi.fn(),
-        };
+        });
         return selector ? selector(state) : state;
       });
 
@@ -110,12 +127,7 @@ describe('AthleteInfoFields', () => {
       const mockSetField = vi.fn();
 
       vi.mocked(usePosterBuilderStore).mockImplementation((selector) => {
-        const state = {
-          athleteName: '',
-          beltRank: 'white',
-          team: '',
-          setField: mockSetField,
-        };
+        const state = createMockState({ setField: mockSetField });
         return selector ? selector(state) : state;
       });
 
@@ -142,12 +154,7 @@ describe('AthleteInfoFields', () => {
       const mockSetField = vi.fn();
 
       vi.mocked(usePosterBuilderStore).mockImplementation((selector) => {
-        const state = {
-          athleteName: '',
-          beltRank: 'white',
-          team: '',
-          setField: mockSetField,
-        };
+        const state = createMockState({ setField: mockSetField });
         return selector ? selector(state) : state;
       });
 
@@ -167,12 +174,7 @@ describe('AthleteInfoFields', () => {
       const mockSetField = vi.fn();
 
       vi.mocked(usePosterBuilderStore).mockImplementation((selector) => {
-        const state = {
-          athleteName: '',
-          beltRank: 'white',
-          team: '',
-          setField: mockSetField,
-        };
+        const state = createMockState({ setField: mockSetField });
         return selector ? selector(state) : state;
       });
 

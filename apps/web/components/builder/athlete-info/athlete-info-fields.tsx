@@ -48,7 +48,6 @@ export function AthleteInfoFields(): React.ReactElement {
 
   // Validation state
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   // Sync local state when store changes (e.g., rehydration from localStorage)
   useEffect(() => {
@@ -113,7 +112,6 @@ export function AthleteInfoFields(): React.ReactElement {
 
   // Handler for athlete name blur - validates on blur
   const handleAthleteNameBlur = useCallback(() => {
-    setTouched((prev) => ({ ...prev, athleteName: true }));
     const error = validateField('athleteName', athleteName);
     setErrors((prev) => ({ ...prev, athleteName: error }));
   }, [athleteName, validateField]);
@@ -133,7 +131,6 @@ export function AthleteInfoFields(): React.ReactElement {
 
   // Handler for team blur - validates on blur
   const handleTeamBlur = useCallback(() => {
-    setTouched((prev) => ({ ...prev, team: true }));
     const error = validateField('team', team);
     setErrors((prev) => ({ ...prev, team: error }));
   }, [team, validateField]);
