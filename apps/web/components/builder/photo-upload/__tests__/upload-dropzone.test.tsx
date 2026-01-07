@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UploadDropzone } from '../upload-dropzone';
 
 describe('UploadDropzone', () => {
@@ -61,6 +61,82 @@ describe('UploadDropzone', () => {
       render(<UploadDropzone {...defaultProps} isLoading={true} />);
 
       expect(screen.queryByText(/tap to upload/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('file selection', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('triggers file input when clicked', async () => {
+      const user = userEvent.setup();
+      const onFileSelect = vi.fn();
+      render(<UploadDropzone {...defaultProps} onFileSelect={onFileSelect} />);
+
+      const input = screen.getByTestId('file-input');
+      const clickSpy = vi.spyOn(input, 'click');
+
+      const button = screen.getByRole('button');
+      await user.click(button);
+
+      expect(clickSpy).toHaveBeenCalled();
+    });
+
+    it('calls onFileSelect when file is selected', async () => {
+      const onFileSelect = vi.fn();
+      render(<UploadDropzone {...defaultProps} onFileSelect={onFileSelect} />);
+
+      const input = screen.getByTestId('file-input');
+      const file = new File(['test'], 'photo.jpg', { type: 'image/jpeg' });
+
+      await userEvent.upload(input, file);
+
+      expect(onFileSelect).toHaveBeenCalledWith(file);
+    });
+  });
+
+  describe('drag and drop', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('shows drag active state on dragenter', () => {
+      render(<UploadDropzone {...defaultProps} />);
+
+      const dropzone = screen.getByRole('button');
+
+      fireEvent.dragEnter(dropzone);
+
+      expect(dropzone).toHaveClass('border-primary-400');
+    });
+
+    it('removes drag active state on dragleave', () => {
+      render(<UploadDropzone {...defaultProps} />);
+
+      const dropzone = screen.getByRole('button');
+
+      fireEvent.dragEnter(dropzone);
+      expect(dropzone).toHaveClass('border-primary-400');
+
+      fireEvent.dragLeave(dropzone);
+      expect(dropzone).toHaveClass('border-primary-600');
+    });
+
+    it('calls onFileSelect when file is dropped', () => {
+      const onFileSelect = vi.fn();
+      render(<UploadDropzone {...defaultProps} onFileSelect={onFileSelect} />);
+
+      const dropzone = screen.getByRole('button');
+      const file = new File(['test'], 'photo.jpg', { type: 'image/jpeg' });
+
+      fireEvent.drop(dropzone, {
+        dataTransfer: {
+          files: [file],
+        },
+      });
+
+      expect(onFileSelect).toHaveBeenCalledWith(file);
     });
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +18,7 @@ export function UploadDropzone({
   className,
 }: UploadDropzoneProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragActive, setIsDragActive] = useState(false);
 
   const handleClick = (): void => {
     inputRef.current?.click();
@@ -32,17 +33,50 @@ export function UploadDropzone({
     e.target.value = '';
   };
 
+  const handleDragEnter = (e: React.DragEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      onFileSelect(file);
+    }
+  };
+
   return (
     <div className={cn('relative', className)}>
       <button
         type="button"
         onClick={handleClick}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
         disabled={isLoading}
         className={cn(
           'flex w-full flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors',
           'border-primary-600 bg-primary-900/50 hover:border-primary-400 hover:bg-primary-900/70',
           'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-primary-950',
           'disabled:cursor-not-allowed disabled:opacity-50',
+          isDragActive && 'border-primary-400 bg-primary-900/70',
           error && 'border-red-500'
         )}
       >
