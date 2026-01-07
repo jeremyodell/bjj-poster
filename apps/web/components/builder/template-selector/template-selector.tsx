@@ -1,6 +1,7 @@
 'use client';
 
-import { RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTemplates } from '@/lib/hooks';
 import { usePosterBuilderStore } from '@/lib/stores/poster-builder-store';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { TemplateCard } from './template-card';
 import { TemplateGrid } from './template-grid';
 
 export function TemplateSelector(): JSX.Element {
+  const [isBrowseAllOpen, setIsBrowseAllOpen] = useState(false);
   const { data: templates, isLoading, isError, refetch } = useTemplates();
   const { selectedTemplateId, setTemplate } = usePosterBuilderStore();
 
@@ -65,6 +67,36 @@ export function TemplateSelector(): JSX.Element {
             />
           ))}
         </TemplateGrid>
+      </section>
+
+      <section>
+        <button
+          type="button"
+          onClick={() => setIsBrowseAllOpen(!isBrowseAllOpen)}
+          className="flex w-full items-center justify-between rounded-lg bg-gray-800 px-4 py-3 text-left text-white transition-colors hover:bg-gray-700"
+        >
+          <span className="font-medium">Browse all templates</span>
+          {isBrowseAllOpen ? (
+            <ChevronUp className="h-5 w-5" />
+          ) : (
+            <ChevronDown className="h-5 w-5" />
+          )}
+        </button>
+
+        {isBrowseAllOpen && (
+          <div className="mt-4">
+            <TemplateGrid>
+              {templates.map((template) => (
+                <TemplateCard
+                  key={template.id}
+                  template={template}
+                  isSelected={selectedTemplateId === template.id}
+                  onSelect={setTemplate}
+                />
+              ))}
+            </TemplateGrid>
+          </div>
+        )}
       </section>
     </div>
   );

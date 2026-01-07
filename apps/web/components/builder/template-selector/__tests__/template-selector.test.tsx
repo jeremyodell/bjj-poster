@@ -100,4 +100,50 @@ describe('TemplateSelector', () => {
     expect(screen.getByText('Modern')).toBeInTheDocument();
     expect(screen.getByText('Bold')).toBeInTheDocument();
   });
+
+  it('shows browse all button that expands to show all templates', async () => {
+    vi.mocked(useTemplates).mockReturnValue({
+      data: mockTemplates,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useTemplates>);
+
+    render(<TemplateSelector />, { wrapper: createWrapper() });
+
+    const browseButton = screen.getByRole('button', { name: /browse all templates/i });
+    expect(browseButton).toBeInTheDocument();
+
+    // Fourth template should not be visible initially (only in browse all)
+    expect(screen.queryByText('Kids')).not.toBeInTheDocument();
+
+    // Click to expand
+    await userEvent.click(browseButton);
+
+    // Now all templates should be visible
+    expect(screen.getByText('Kids')).toBeInTheDocument();
+  });
+
+  it('collapses browse all section when clicked again', async () => {
+    vi.mocked(useTemplates).mockReturnValue({
+      data: mockTemplates,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as ReturnType<typeof useTemplates>);
+
+    render(<TemplateSelector />, { wrapper: createWrapper() });
+
+    const browseButton = screen.getByRole('button', { name: /browse all templates/i });
+
+    // Expand
+    await userEvent.click(browseButton);
+    expect(screen.getByText('Kids')).toBeInTheDocument();
+
+    // Collapse
+    await userEvent.click(browseButton);
+    expect(screen.queryByText('Kids')).not.toBeInTheDocument();
+  });
 });
