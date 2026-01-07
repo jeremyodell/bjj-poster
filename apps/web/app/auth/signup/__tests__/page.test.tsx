@@ -48,7 +48,7 @@ describe('Signup Page', () => {
       render(<SignupPage />);
 
       await user.type(screen.getByLabelText('Email'), 'test@example.com');
-      await user.type(screen.getByLabelText('Password'), 'password123');
+      await user.type(screen.getByLabelText('Password'), 'Password123');
       await user.click(screen.getByRole('button', { name: /create account/i }));
 
       await waitFor(
@@ -64,7 +64,7 @@ describe('Signup Page', () => {
       render(<SignupPage />);
 
       await user.type(screen.getByLabelText('Email'), 'test@example.com');
-      await user.type(screen.getByLabelText('Password'), 'password123');
+      await user.type(screen.getByLabelText('Password'), 'Password123');
       await user.click(screen.getByRole('button', { name: /create account/i }));
 
       expect(

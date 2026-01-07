@@ -23,7 +23,7 @@ export default function SignupPage(): JSX.Element {
     } catch (err) {
       setError('Signup failed. Please try again later.');
       if (process.env.NODE_ENV === 'development') {
-        console.error('Signup error:', err);
+        console.error('Signup error:', err instanceof Error ? err.message : 'Unknown error');
       }
     }
   };

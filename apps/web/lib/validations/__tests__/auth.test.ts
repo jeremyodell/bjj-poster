@@ -43,10 +43,10 @@ describe('Auth Validation Schemas', () => {
   });
 
   describe('signupSchema', () => {
-    it('accepts valid email and password (8+ chars)', () => {
+    it('accepts valid email and password meeting all requirements', () => {
       const result = signupSchema.safeParse({
         email: 'test@example.com',
-        password: 'password123',
+        password: 'Password123',
       });
       expect(result.success).toBe(true);
     });
@@ -54,7 +54,7 @@ describe('Auth Validation Schemas', () => {
     it('rejects password shorter than 8 characters', () => {
       const result = signupSchema.safeParse({
         email: 'test@example.com',
-        password: 'short',
+        password: 'Pass1',
       });
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -64,10 +64,49 @@ describe('Auth Validation Schemas', () => {
       }
     });
 
+    it('rejects password without uppercase letter', () => {
+      const result = signupSchema.safeParse({
+        email: 'test@example.com',
+        password: 'password123',
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toBe(
+          'Password must contain at least one uppercase letter'
+        );
+      }
+    });
+
+    it('rejects password without lowercase letter', () => {
+      const result = signupSchema.safeParse({
+        email: 'test@example.com',
+        password: 'PASSWORD123',
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toBe(
+          'Password must contain at least one lowercase letter'
+        );
+      }
+    });
+
+    it('rejects password without number', () => {
+      const result = signupSchema.safeParse({
+        email: 'test@example.com',
+        password: 'Passworddd',
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toBe(
+          'Password must contain at least one number'
+        );
+      }
+    });
+
     it('rejects invalid email format', () => {
       const result = signupSchema.safeParse({
         email: 'not-an-email',
-        password: 'password123',
+        password: 'Password123',
       });
       expect(result.success).toBe(false);
     });

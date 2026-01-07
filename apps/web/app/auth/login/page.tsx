@@ -23,7 +23,7 @@ export default function LoginPage(): JSX.Element {
     } catch (err) {
       setError('Login failed. Please check your credentials and try again.');
       if (process.env.NODE_ENV === 'development') {
-        console.error('Login error:', err);
+        console.error('Login error:', err instanceof Error ? err.message : 'Unknown error');
       }
     }
   };
