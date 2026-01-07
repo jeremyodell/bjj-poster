@@ -41,3 +41,10 @@ export type {
 } from './types.js';
 export type { RgbColor, RgbaColor } from './color-utils.js';
 export type { CompositeLayer, CompositeOptions } from './composite.js';
+export { composePoster, COMPOSE_STAGES } from './compose-poster.js';
+export type {
+  ComposePosterOptions,
+  ComposePosterResult,
+  OutputOptions,
+} from './compose-poster.js';
+export { convertTemplatePosition } from './position-utils.js';
