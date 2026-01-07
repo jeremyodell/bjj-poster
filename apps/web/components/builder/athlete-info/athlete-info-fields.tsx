@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -10,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { usePosterBuilderStore, type BeltRank } from '@/lib/stores';
 
 /** Belt rank configuration with display names and colors */
 const BELT_OPTIONS = [
@@ -22,7 +24,82 @@ const BELT_OPTIONS = [
   { value: 'red', label: 'Red', colorClass: 'bg-red-600' },
 ] as const;
 
+/** Debounce delay in milliseconds for text field updates */
+const DEBOUNCE_MS = 300;
+
 export function AthleteInfoFields(): React.ReactElement {
+  // Get state and actions from store
+  const storeAthleteName = usePosterBuilderStore((state) => state.athleteName);
+  const storeBeltRank = usePosterBuilderStore((state) => state.beltRank);
+  const storeTeam = usePosterBuilderStore((state) => state.team);
+  const setField = usePosterBuilderStore((state) => state.setField);
+
+  // Local state for immediate UI updates
+  const [athleteName, setAthleteName] = useState(storeAthleteName);
+  const [team, setTeam] = useState(storeTeam);
+  const [beltRank, setBeltRank] = useState<BeltRank>(storeBeltRank);
+
+  // Sync local state when store changes (e.g., rehydration from localStorage)
+  useEffect(() => {
+    setAthleteName(storeAthleteName);
+  }, [storeAthleteName]);
+
+  useEffect(() => {
+    setTeam(storeTeam);
+  }, [storeTeam]);
+
+  useEffect(() => {
+    setBeltRank(storeBeltRank);
+  }, [storeBeltRank]);
+
+  // Debounced sync to store for athlete name
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (athleteName !== storeAthleteName) {
+        setField('athleteName', athleteName);
+      }
+    }, DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [athleteName, storeAthleteName, setField]);
+
+  // Debounced sync to store for team
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (team !== storeTeam) {
+        setField('team', team);
+      }
+    }, DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [team, storeTeam, setField]);
+
+  // Handler for athlete name input
+  const handleAthleteNameChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setAthleteName(e.target.value);
+    },
+    []
+  );
+
+  // Handler for team input
+  const handleTeamChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setTeam(e.target.value);
+    },
+    []
+  );
+
+  // Handler for belt rank - updates immediately (no debounce)
+  const handleBeltRankChange = useCallback(
+    (value: string) => {
+      const beltValue = value as BeltRank;
+      setBeltRank(beltValue);
+      setField('beltRank', beltValue);
+    },
+    [setField]
+  );
+
   return (
     <div className="space-y-4">
       {/* Athlete Name */}
@@ -35,6 +112,8 @@ export function AthleteInfoFields(): React.ReactElement {
           type="text"
           placeholder="Enter athlete name"
           maxLength={50}
+          value={athleteName}
+          onChange={handleAthleteNameChange}
         />
       </div>
 
@@ -43,7 +122,7 @@ export function AthleteInfoFields(): React.ReactElement {
         <Label htmlFor="belt-rank">
           Belt Rank <span className="text-destructive">*</span>
         </Label>
-        <Select defaultValue="white">
+        <Select value={beltRank} onValueChange={handleBeltRankChange}>
           <SelectTrigger id="belt-rank">
             <SelectValue placeholder="Select belt rank" />
           </SelectTrigger>
@@ -74,6 +153,8 @@ export function AthleteInfoFields(): React.ReactElement {
           type="text"
           placeholder="Enter team name"
           maxLength={50}
+          value={team}
+          onChange={handleTeamChange}
         />
       </div>
     </div>
