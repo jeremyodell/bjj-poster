@@ -1,8 +1,14 @@
+import { TemplateSelector } from '@/components/builder';
+
 export default function BuilderPage(): JSX.Element {
   return (
     <div className="p-8">
-      <h1 className="font-display text-3xl text-white">Poster Builder</h1>
-      <p className="mt-4 text-primary-300">Builder content will go here.</p>
+      <h1 className="font-display text-3xl text-white">Create Your Poster</h1>
+      <p className="mt-2 text-primary-300">Choose a template to get started</p>
+
+      <div className="mt-8">
+        <TemplateSelector />
+      </div>
     </div>
   );
 }
