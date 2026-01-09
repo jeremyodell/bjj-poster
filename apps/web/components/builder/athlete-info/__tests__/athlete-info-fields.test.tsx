@@ -25,6 +25,7 @@ const createMockState = (overrides = {}) => ({
   toggleAdvancedOptions: vi.fn(),
   togglePreview: vi.fn(),
   generatePoster: vi.fn(),
+  loadFromPoster: vi.fn(),
   reset: vi.fn(),
   ...overrides,
 });
