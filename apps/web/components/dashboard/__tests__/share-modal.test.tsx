@@ -71,6 +71,30 @@ describe('ShareModal', () => {
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('calls onClose when Escape key pressed', () => {
+    render(<ShareModal {...defaultProps} />);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows error state when clipboard write fails', async () => {
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn().mockRejectedValue(new Error('Clipboard error')),
+      },
+    });
+
+    render(<ShareModal {...defaultProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy link/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/failed/i)).toBeInTheDocument();
+    });
+  });
+
   it('has correct Facebook share URL', () => {
     render(<ShareModal {...defaultProps} />);
 
