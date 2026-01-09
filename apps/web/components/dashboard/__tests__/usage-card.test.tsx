@@ -159,4 +159,68 @@ describe('UsageCard', () => {
       expect(progressBar).toHaveClass('bg-red-500');
     });
   });
+
+  describe('usage display', () => {
+    it('displays X / Y format for free tier', () => {
+      mockUseUserStore.mockImplementation((selector) =>
+        selector({
+          postersThisMonth: 1,
+          postersLimit: 3,
+          subscriptionTier: 'free',
+        })
+      );
+
+      render(<UsageCard />);
+
+      expect(screen.getByText('1')).toBeInTheDocument();
+      expect(screen.getByText('/')).toBeInTheDocument();
+      expect(screen.getByText('3')).toBeInTheDocument();
+      expect(screen.getByText(/posters used/i)).toBeInTheDocument();
+    });
+
+    it('displays remaining count for pro tier', () => {
+      mockUseUserStore.mockImplementation((selector) =>
+        selector({
+          postersThisMonth: 8,
+          postersLimit: 20,
+          subscriptionTier: 'pro',
+        })
+      );
+
+      render(<UsageCard />);
+
+      expect(screen.getByText('8')).toBeInTheDocument();
+      expect(screen.getByText('20')).toBeInTheDocument();
+      expect(screen.getByText(/12 remaining/i)).toBeInTheDocument();
+    });
+
+    it('displays UNLIMITED for premium tier', () => {
+      mockUseUserStore.mockImplementation((selector) =>
+        selector({
+          postersThisMonth: 50,
+          postersLimit: -1,
+          subscriptionTier: 'premium',
+        })
+      );
+
+      render(<UsageCard />);
+
+      expect(screen.getByText(/unlimited/i)).toBeInTheDocument();
+      expect(screen.queryByTestId('usage-progress')).not.toBeInTheDocument();
+    });
+
+    it('shows limit reached message when at limit', () => {
+      mockUseUserStore.mockImplementation((selector) =>
+        selector({
+          postersThisMonth: 3,
+          postersLimit: 3,
+          subscriptionTier: 'free',
+        })
+      );
+
+      render(<UsageCard />);
+
+      expect(screen.getByText(/limit reached/i)).toBeInTheDocument();
+    });
+  });
 });
