@@ -47,6 +47,10 @@ describe('usePosterHistory', () => {
         createdAt: '2026-01-01',
         thumbnailUrl: '/p1.png',
         title: 'Test Poster',
+        athleteName: 'Test Athlete',
+        tournament: 'Test Tournament',
+        beltRank: 'Blue Belt',
+        status: 'completed' as const,
       },
     ];
     vi.mocked(fetchPosterHistory).mockResolvedValue(mockPosters);
@@ -87,6 +91,10 @@ describe('usePosterHistory', () => {
         createdAt: '2026-01-01',
         thumbnailUrl: '/p1.png',
         title: 'Test Poster',
+        athleteName: 'Test Athlete',
+        tournament: 'Test Tournament',
+        beltRank: 'Blue Belt',
+        status: 'completed' as const,
       },
     ];
     vi.mocked(fetchPosterHistory).mockResolvedValue(mockPosters);
