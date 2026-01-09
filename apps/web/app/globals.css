@@ -141,7 +141,11 @@
     @apply shadow-gold-md;
   }
 
-  /* Premium button base */
+  /**
+   * Premium button base - shimmer effect on hover.
+   * Usage: Add to buttons/links for premium feel.
+   * Example: <button className="btn-premium">Click me</button>
+   */
   .btn-premium {
     @apply relative overflow-hidden;
     transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
@@ -170,12 +174,21 @@
   .stagger-7 { animation-delay: 0.7s; }
   .stagger-8 { animation-delay: 0.8s; }
 
-  /* Initial opacity for staggered animations */
+  /**
+   * Initial opacity for scroll-triggered animations.
+   * Usage: Combine with JS intersection observer to fade in elements on scroll.
+   * Note: Requires JS to add animation class when element enters viewport.
+   * Example: <div className="animate-on-scroll">Content</div>
+   */
   .animate-on-scroll {
     opacity: 0;
   }
 
-  /* Magnetic hover effect container */
+  /**
+   * Magnetic hover effect container for cursor-following animations.
+   * Usage: Requires JS mouse event handler to translate element toward cursor.
+   * Example: Apply to interactive elements for playful hover response.
+   */
   .magnetic {
     transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1);
   }

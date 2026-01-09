@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { Trophy, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -9,17 +9,30 @@ import { UserMenu } from '../builder/user-menu';
 import { MobileNav } from '../builder/mobile-nav';
 import { Button } from '@/components/ui/button';
 
+/** Scroll threshold in pixels before header style changes */
+const SCROLL_THRESHOLD = 10;
+
 export function DashboardHeader(): JSX.Element {
   const [isScrolled, setIsScrolled] = useState(false);
+  const ticking = useRef(false);
+
+  const updateScrollState = useCallback(() => {
+    setIsScrolled(window.scrollY > SCROLL_THRESHOLD);
+    ticking.current = false;
+  }, []);
 
   useEffect(() => {
     const handleScroll = (): void => {
-      setIsScrolled(window.scrollY > 10);
+      // Throttle scroll events using requestAnimationFrame
+      if (!ticking.current) {
+        requestAnimationFrame(updateScrollState);
+        ticking.current = true;
+      }
     };
 
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [updateScrollState]);
 
   return (
     <header
@@ -33,9 +46,9 @@ export function DashboardHeader(): JSX.Element {
     >
       <div className="flex h-full items-center justify-between px-4 md:px-6">
         {/* Left side - Logo */}
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2" aria-label="BJJ Poster - Go to homepage">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-500">
-            <Trophy className="h-4 w-4 text-surface-950" />
+            <Trophy className="h-4 w-4 text-surface-950" aria-hidden="true" />
           </div>
           <span className="font-display text-xl tracking-wider text-white">
             BJJ POSTER
