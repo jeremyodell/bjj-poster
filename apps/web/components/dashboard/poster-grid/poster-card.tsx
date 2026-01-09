@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Download, Share2, Copy, ImageIcon } from 'lucide-react';
+import { Download, Share2, Copy, ImageIcon, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ShareModal } from './share-modal';
@@ -16,10 +16,28 @@ interface PosterCardProps {
 }
 
 /**
+ * Validates that a URL is from the same origin (security check for downloads)
+ */
+function isSameOrigin(url: string): boolean {
+  if (typeof window === 'undefined') return false;
+
+  // Relative URLs are safe
+  if (url.startsWith('/')) return true;
+
+  try {
+    const urlObj = new URL(url, window.location.origin);
+    return urlObj.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Converts display belt rank to store belt rank format
  */
 function toBeltRank(displayRank: string): BeltRank {
-  const normalized = displayRank.toLowerCase().replace(' belt', '');
+  // Use regex with global flag and trim to handle edge cases
+  const normalized = displayRank.toLowerCase().replace(/\s*belt\s*/gi, '').trim();
   const validRanks: BeltRank[] = ['white', 'blue', 'purple', 'brown', 'black', 'red-black', 'red'];
   return validRanks.includes(normalized as BeltRank) ? (normalized as BeltRank) : 'white';
 }
@@ -39,10 +57,25 @@ export function PosterCard({ poster }: PosterCardProps): JSX.Element {
   const router = useRouter();
   const [shareOpen, setShareOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  const handleDownload = async () => {
+  const handleDownload = useCallback(async () => {
+    // Security: Only allow downloads from same origin
+    if (!isSameOrigin(poster.thumbnailUrl)) {
+      setDownloadError('Cannot download from external sources');
+      setTimeout(() => setDownloadError(null), 3000);
+      return;
+    }
+
+    setIsDownloading(true);
+    setDownloadError(null);
+
     try {
       const response = await fetch(poster.thumbnailUrl);
+      if (!response.ok) {
+        throw new Error('Failed to fetch image');
+      }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
 
@@ -56,10 +89,14 @@ export function PosterCard({ poster }: PosterCardProps): JSX.Element {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download failed:', error);
+      setDownloadError('Download failed. Please try again.');
+      setTimeout(() => setDownloadError(null), 3000);
+    } finally {
+      setIsDownloading(false);
     }
-  };
+  }, [poster.thumbnailUrl, poster.tournament]);
 
-  const handleDuplicate = () => {
+  const handleDuplicate = useCallback(() => {
     usePosterBuilderStore.getState().loadFromPoster({
       templateId: poster.templateId,
       athleteName: poster.athleteName,
@@ -67,9 +104,13 @@ export function PosterCard({ poster }: PosterCardProps): JSX.Element {
       beltRank: toBeltRank(poster.beltRank),
     });
     router.push('/builder');
-  };
+  }, [poster.templateId, poster.athleteName, poster.tournament, poster.beltRank, router]);
 
-  const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/posters/${poster.id}`;
+  // Memoize share URL to prevent unnecessary recalculations
+  const shareUrl = useMemo(
+    () => `${typeof window !== 'undefined' ? window.location.origin : ''}/posters/${poster.id}`,
+    [poster.id]
+  );
 
   return (
     <>
@@ -105,17 +146,29 @@ export function PosterCard({ poster }: PosterCardProps): JSX.Element {
             {poster.beltRank} &bull; {formatDate(poster.createdAt)}
           </p>
 
+          {/* Error message */}
+          {downloadError && (
+            <p className="mb-2 text-xs text-red-500" role="alert">
+              {downloadError}
+            </p>
+          )}
+
           {/* Action buttons */}
           <div className="flex gap-2">
             <Button
               variant="ghost"
               size="icon"
               onClick={handleDownload}
-              aria-label="Download"
-              title="Download"
+              disabled={isDownloading}
+              aria-label={isDownloading ? 'Downloading...' : 'Download'}
+              title={isDownloading ? 'Downloading...' : 'Download'}
               className="h-8 w-8"
             >
-              <Download className="h-4 w-4" />
+              {isDownloading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
             </Button>
 
             <Button

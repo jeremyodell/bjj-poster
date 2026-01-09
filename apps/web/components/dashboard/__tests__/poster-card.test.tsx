@@ -32,7 +32,6 @@ describe('PosterCard', () => {
     templateId: 'tpl-001',
     createdAt: '2026-01-01T10:00:00Z',
     thumbnailUrl: '/posters/poster-001.png',
-    title: 'Spring Championship 2026',
     athleteName: 'Marcus Silva',
     tournament: 'Spring Championship 2026',
     beltRank: 'Purple Belt',

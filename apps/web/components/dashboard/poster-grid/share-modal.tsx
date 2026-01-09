@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Link2, Instagram, Facebook, Twitter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -18,14 +18,36 @@ export function ShareModal({
   posterTitle,
 }: ShareModalProps): JSX.Element | null {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
+  const handleCopyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(posterUrl);
+      setCopied(true);
+      setCopyError(false);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      setCopyError(true);
+      setTimeout(() => setCopyError(false), 2000);
+    }
+  }, [posterUrl]);
 
   if (!isOpen) return null;
-
-  const handleCopyLink = async () => {
-    await navigator.clipboard.writeText(posterUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const shareText = encodeURIComponent(`Check out my ${posterTitle} poster!`);
   const encodedUrl = encodeURIComponent(posterUrl);
@@ -67,21 +89,22 @@ export function ShareModal({
             className="flex flex-col items-center gap-2 rounded-lg p-3 transition-colors hover:bg-surface-800"
             aria-label="Copy link"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-800">
-              <Link2 className="h-5 w-5 text-white" />
+            <div className={`flex h-12 w-12 items-center justify-center rounded-full ${copyError ? 'bg-red-500/20' : 'bg-surface-800'}`}>
+              <Link2 className={`h-5 w-5 ${copyError ? 'text-red-500' : 'text-white'}`} />
             </div>
-            <span className="text-xs text-surface-400">
-              {copied ? 'Copied!' : 'Copy'}
+            <span className={`text-xs ${copyError ? 'text-red-500' : 'text-surface-400'}`}>
+              {copyError ? 'Failed!' : copied ? 'Copied!' : 'Copy'}
             </span>
           </button>
 
-          {/* Instagram */}
+          {/* Instagram - Note: Instagram doesn't support direct URL sharing */}
           <a
             href="https://instagram.com"
             target="_blank"
             rel="noopener noreferrer"
             className="flex flex-col items-center gap-2 rounded-lg p-3 transition-colors hover:bg-surface-800"
             aria-label="Instagram"
+            title="Opens Instagram (direct sharing not supported - copy link first)"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500">
               <Instagram className="h-5 w-5 text-white" />

@@ -16,7 +16,6 @@ export interface Poster {
   templateId: string;
   createdAt: string;
   thumbnailUrl: string;
-  title: string;
   athleteName: string;
   tournament: string;
   beltRank: string;
