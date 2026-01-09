@@ -223,4 +223,78 @@ describe('UsageCard', () => {
       expect(screen.getByText(/limit reached/i)).toBeInTheDocument();
     });
   });
+
+  describe('upgrade CTA', () => {
+    it('shows upgrade CTA for free user at 80%', () => {
+      mockUseUserStore.mockImplementation((selector) =>
+        selector({
+          postersThisMonth: 8,
+          postersLimit: 10,
+          subscriptionTier: 'free',
+        })
+      );
+
+      render(<UsageCard />);
+
+      const upgradeLink = screen.getByRole('link', { name: /upgrade/i });
+      expect(upgradeLink).toHaveAttribute('href', '/pricing');
+    });
+
+    it('shows upgrade CTA for free user at limit', () => {
+      mockUseUserStore.mockImplementation((selector) =>
+        selector({
+          postersThisMonth: 3,
+          postersLimit: 3,
+          subscriptionTier: 'free',
+        })
+      );
+
+      render(<UsageCard />);
+
+      const upgradeLink = screen.getByRole('link', { name: /upgrade/i });
+      expect(upgradeLink).toBeInTheDocument();
+    });
+
+    it('hides upgrade CTA for free user under 80%', () => {
+      mockUseUserStore.mockImplementation((selector) =>
+        selector({
+          postersThisMonth: 1,
+          postersLimit: 3,
+          subscriptionTier: 'free',
+        })
+      );
+
+      render(<UsageCard />);
+
+      expect(screen.queryByRole('link', { name: /upgrade/i })).not.toBeInTheDocument();
+    });
+
+    it('hides upgrade CTA for pro users', () => {
+      mockUseUserStore.mockImplementation((selector) =>
+        selector({
+          postersThisMonth: 18,
+          postersLimit: 20,
+          subscriptionTier: 'pro',
+        })
+      );
+
+      render(<UsageCard />);
+
+      expect(screen.queryByRole('link', { name: /upgrade/i })).not.toBeInTheDocument();
+    });
+
+    it('hides upgrade CTA for premium users', () => {
+      mockUseUserStore.mockImplementation((selector) =>
+        selector({
+          postersThisMonth: 100,
+          postersLimit: -1,
+          subscriptionTier: 'premium',
+        })
+      );
+
+      render(<UsageCard />);
+
+      expect(screen.queryByRole('link', { name: /upgrade/i })).not.toBeInTheDocument();
+    });
+  });
 });
