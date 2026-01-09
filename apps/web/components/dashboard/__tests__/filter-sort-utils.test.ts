@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { filterPosters } from '../poster-grid/filter-sort-utils';
+import { filterPosters, sortPosters } from '../poster-grid/filter-sort-utils';
 import type { Poster } from '@/lib/types/api';
 
 const createPoster = (overrides: Partial<Poster> = {}): Poster => ({
@@ -81,6 +81,44 @@ describe('filterPosters', () => {
 
   it('handles empty poster array', () => {
     const result = filterPosters([], 'all');
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('sortPosters', () => {
+  const posters: Poster[] = [
+    createPoster({ id: '1', tournament: 'Alpha Cup', createdAt: '2026-01-05T10:00:00Z' }),
+    createPoster({ id: '2', tournament: 'Zebra Open', createdAt: '2026-01-08T10:00:00Z' }),
+    createPoster({ id: '3', tournament: 'Beta Championship', createdAt: '2026-01-01T10:00:00Z' }),
+  ];
+
+  it('sorts by newest first (default)', () => {
+    const result = sortPosters(posters, 'newest');
+    expect(result.map((p) => p.id)).toEqual(['2', '1', '3']);
+  });
+
+  it('sorts by oldest first', () => {
+    const result = sortPosters(posters, 'oldest');
+    expect(result.map((p) => p.id)).toEqual(['3', '1', '2']);
+  });
+
+  it('sorts alphabetically by tournament name', () => {
+    const result = sortPosters(posters, 'a-z');
+    expect(result.map((p) => p.tournament)).toEqual([
+      'Alpha Cup',
+      'Beta Championship',
+      'Zebra Open',
+    ]);
+  });
+
+  it('does not mutate original array', () => {
+    const original = [...posters];
+    sortPosters(posters, 'oldest');
+    expect(posters).toEqual(original);
+  });
+
+  it('handles empty array', () => {
+    const result = sortPosters([], 'newest');
     expect(result).toHaveLength(0);
   });
 });
