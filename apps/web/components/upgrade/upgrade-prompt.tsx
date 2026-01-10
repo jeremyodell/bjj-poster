@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/dialog'
 import { track } from '@/lib/analytics'
 import { getTierBenefits, getTierHeadline, type TargetTier } from './tier-benefits'
-import { cn } from '@/lib/utils'
 
 export type UpgradePromptVariant = 'banner' | 'card' | 'modal'
 
@@ -51,7 +50,7 @@ export function UpgradePrompt({
         <div className="flex items-center gap-3">
           <Sparkles className="h-5 w-5 text-gold-500" />
           <p className="text-sm font-medium text-surface-100">
-            {headline} for {benefits[0].toLowerCase()}
+            {headline} for {benefits[0]?.toLowerCase()}
           </p>
         </div>
         <div className="flex items-center gap-2">
