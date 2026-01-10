@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useQuotaGate } from '../use-quota-gate'
 import { useUserStore } from '@/lib/stores'
-import type { Poster } from '@/lib/types/api'
 
 // Mock next/navigation
 const mockPush = vi.fn()
@@ -14,19 +13,6 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/analytics', () => ({
   track: vi.fn(),
 }))
-
-const mockPosters: Poster[] = [
-  {
-    id: 'poster-1',
-    templateId: 'template-1',
-    createdAt: '2026-01-05T12:00:00Z',
-    thumbnailUrl: 'https://example.com/poster1.jpg',
-    athleteName: 'John Doe',
-    tournament: 'IBJJF Worlds',
-    beltRank: 'purple',
-    status: 'completed',
-  },
-]
 
 describe('useQuotaGate', () => {
   beforeEach(() => {
@@ -48,7 +34,7 @@ describe('useQuotaGate', () => {
         useUserStore.setState({ postersThisMonth: 2, postersLimit: 3 })
       })
 
-      const { result } = renderHook(() => useQuotaGate({ posters: mockPosters }))
+      const { result } = renderHook(() => useQuotaGate())
 
       expect(result.current.isBlocked).toBe(false)
     })
@@ -62,7 +48,7 @@ describe('useQuotaGate', () => {
         })
       })
 
-      const { result } = renderHook(() => useQuotaGate({ posters: mockPosters }))
+      const { result } = renderHook(() => useQuotaGate())
 
       expect(result.current.isBlocked).toBe(true)
     })
@@ -76,7 +62,7 @@ describe('useQuotaGate', () => {
         })
       })
 
-      const { result } = renderHook(() => useQuotaGate({ posters: mockPosters }))
+      const { result } = renderHook(() => useQuotaGate())
 
       expect(result.current.isBlocked).toBe(false)
     })
@@ -90,7 +76,7 @@ describe('useQuotaGate', () => {
         })
       })
 
-      const { result } = renderHook(() => useQuotaGate({ posters: mockPosters }))
+      const { result } = renderHook(() => useQuotaGate())
 
       expect(result.current.isBlocked).toBe(false)
     })
@@ -106,7 +92,7 @@ describe('useQuotaGate', () => {
         })
       })
 
-      const { result } = renderHook(() => useQuotaGate({ posters: mockPosters }))
+      const { result } = renderHook(() => useQuotaGate())
 
       expect(result.current.showModal).toBe(true)
       expect(result.current.showModal).toBe(result.current.isBlocked)
@@ -115,7 +101,7 @@ describe('useQuotaGate', () => {
 
   describe('handleUpgrade', () => {
     it('navigates to /pricing', () => {
-      const { result } = renderHook(() => useQuotaGate({ posters: mockPosters }))
+      const { result } = renderHook(() => useQuotaGate())
 
       act(() => {
         result.current.handleUpgrade()
@@ -127,7 +113,7 @@ describe('useQuotaGate', () => {
 
   describe('handleMaybeLater', () => {
     it('navigates to /dashboard', () => {
-      const { result } = renderHook(() => useQuotaGate({ posters: mockPosters }))
+      const { result } = renderHook(() => useQuotaGate())
 
       act(() => {
         result.current.handleMaybeLater()

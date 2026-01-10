@@ -2,11 +2,6 @@
 
 import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/lib/stores'
-import type { Poster } from '@/lib/types/api'
-
-export interface UseQuotaGateOptions {
-  posters: Poster[]
-}
 
 export interface UseQuotaGateReturn {
   isBlocked: boolean
@@ -15,7 +10,7 @@ export interface UseQuotaGateReturn {
   handleMaybeLater: () => void
 }
 
-export function useQuotaGate({ posters }: UseQuotaGateOptions): UseQuotaGateReturn {
+export function useQuotaGate(): UseQuotaGateReturn {
   const router = useRouter()
   const canCreatePoster = useUserStore((state) => state.canCreatePoster())
   const subscriptionTier = useUserStore((state) => state.subscriptionTier)
