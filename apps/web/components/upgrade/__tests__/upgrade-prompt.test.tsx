@@ -96,6 +96,24 @@ describe('UpgradePrompt', () => {
         '/pricing'
       )
     })
+
+    it('calls onCtaClick instead of navigating when provided', async () => {
+      const onCtaClick = vi.fn()
+      const user = userEvent.setup()
+
+      render(
+        <UpgradePrompt
+          variant="card"
+          targetTier="pro"
+          source="quota_modal"
+          onCtaClick={onCtaClick}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /upgrade now/i }))
+
+      expect(onCtaClick).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('modal variant', () => {

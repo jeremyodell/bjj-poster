@@ -20,6 +20,7 @@ export interface UpgradePromptProps {
   targetTier: TargetTier
   source: string
   onDismiss?: () => void
+  onCtaClick?: () => void
 }
 
 export function UpgradePrompt({
@@ -27,6 +28,7 @@ export function UpgradePrompt({
   targetTier,
   source,
   onDismiss,
+  onCtaClick,
 }: UpgradePromptProps) {
   const headline = getTierHeadline(targetTier)
   const benefits = getTierBenefits(targetTier)
@@ -54,11 +56,24 @@ export function UpgradePrompt({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button asChild size="sm" className="bg-gold-500 hover:bg-gold-600 text-surface-950">
-            <Link href="/pricing" onClick={handleCtaClick}>
+          {onCtaClick ? (
+            <Button
+              size="sm"
+              className="bg-gold-500 hover:bg-gold-600 text-surface-950"
+              onClick={() => {
+                handleCtaClick()
+                onCtaClick()
+              }}
+            >
               Upgrade Now
-            </Link>
-          </Button>
+            </Button>
+          ) : (
+            <Button asChild size="sm" className="bg-gold-500 hover:bg-gold-600 text-surface-950">
+              <Link href="/pricing" onClick={handleCtaClick}>
+                Upgrade Now
+              </Link>
+            </Button>
+          )}
           {onDismiss && (
             <button
               onClick={handleDismiss}
@@ -97,11 +112,23 @@ export function UpgradePrompt({
             </li>
           ))}
         </ul>
-        <Button asChild className="w-full bg-gold-500 hover:bg-gold-600 text-surface-950">
-          <Link href="/pricing" onClick={handleCtaClick}>
+        {onCtaClick ? (
+          <Button
+            className="w-full bg-gold-500 hover:bg-gold-600 text-surface-950"
+            onClick={() => {
+              handleCtaClick()
+              onCtaClick()
+            }}
+          >
             Upgrade Now
-          </Link>
-        </Button>
+          </Button>
+        ) : (
+          <Button asChild className="w-full bg-gold-500 hover:bg-gold-600 text-surface-950">
+            <Link href="/pricing" onClick={handleCtaClick}>
+              Upgrade Now
+            </Link>
+          </Button>
+        )}
       </div>
     )
   }
@@ -124,11 +151,23 @@ export function UpgradePrompt({
               </li>
             ))}
           </ul>
-          <Button asChild className="w-full bg-gold-500 hover:bg-gold-600 text-surface-950">
-            <Link href="/pricing" onClick={handleCtaClick}>
+          {onCtaClick ? (
+            <Button
+              className="w-full bg-gold-500 hover:bg-gold-600 text-surface-950"
+              onClick={() => {
+                handleCtaClick()
+                onCtaClick()
+              }}
+            >
               Upgrade Now
-            </Link>
-          </Button>
+            </Button>
+          ) : (
+            <Button asChild className="w-full bg-gold-500 hover:bg-gold-600 text-surface-950">
+              <Link href="/pricing" onClick={handleCtaClick}>
+                Upgrade Now
+              </Link>
+            </Button>
+          )}
         </DialogContent>
       </Dialog>
     )
