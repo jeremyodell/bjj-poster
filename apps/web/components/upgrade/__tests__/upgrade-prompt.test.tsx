@@ -61,4 +61,39 @@ describe('UpgradePrompt', () => {
       expect(screen.queryByRole('button', { name: /close/i })).not.toBeInTheDocument()
     })
   })
+
+  describe('card variant', () => {
+    it('renders card with headline and benefits list', () => {
+      render(
+        <UpgradePrompt variant="card" targetTier="pro" source="test" />
+      )
+
+      expect(screen.getByText('Upgrade to Pro')).toBeInTheDocument()
+      expect(screen.getByText('20 posters/month')).toBeInTheDocument()
+      expect(screen.getByText('HD exports')).toBeInTheDocument()
+      expect(screen.getByText('No watermark')).toBeInTheDocument()
+      expect(screen.getByText('Priority templates')).toBeInTheDocument()
+    })
+
+    it('renders premium benefits when targetTier is premium', () => {
+      render(
+        <UpgradePrompt variant="card" targetTier="premium" source="test" />
+      )
+
+      expect(screen.getByText('Upgrade to Premium')).toBeInTheDocument()
+      expect(screen.getByText('Unlimited posters')).toBeInTheDocument()
+      expect(screen.getByText('4K exports')).toBeInTheDocument()
+    })
+
+    it('has CTA link to pricing', () => {
+      render(
+        <UpgradePrompt variant="card" targetTier="pro" source="test" />
+      )
+
+      expect(screen.getByRole('link', { name: /upgrade now/i })).toHaveAttribute(
+        'href',
+        '/pricing'
+      )
+    })
+  })
 })

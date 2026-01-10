@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import Link from 'next/link'
-import { Sparkles, X } from 'lucide-react'
+import { Sparkles, X, Crown, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { track } from '@/lib/analytics'
 import { getTierBenefits, getTierHeadline, type TargetTier } from './tier-benefits'
@@ -64,6 +64,39 @@ export function UpgradePrompt({
             </button>
           )}
         </div>
+      </div>
+    )
+  }
+
+  if (variant === 'card') {
+    return (
+      <div className="relative rounded-lg border border-gold-500/20 bg-surface-900/80 p-6 backdrop-blur">
+        {onDismiss && (
+          <button
+            onClick={handleDismiss}
+            className="absolute right-3 top-3 p-1 text-surface-400 hover:text-surface-200"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+        <div className="flex items-center gap-2 mb-4">
+          <Crown className="h-6 w-6 text-gold-500" />
+          <h3 className="font-display text-xl text-surface-100">{headline}</h3>
+        </div>
+        <ul className="mb-6 space-y-2">
+          {benefits.map((benefit) => (
+            <li key={benefit} className="flex items-center gap-2 text-sm text-surface-300">
+              <Check className="h-4 w-4 text-gold-500" />
+              {benefit}
+            </li>
+          ))}
+        </ul>
+        <Button asChild className="w-full bg-gold-500 hover:bg-gold-600 text-surface-950">
+          <Link href="/pricing" onClick={handleCtaClick}>
+            Upgrade Now
+          </Link>
+        </Button>
       </div>
     )
   }
