@@ -96,4 +96,40 @@ describe('UpgradePrompt', () => {
       )
     })
   })
+
+  describe('modal variant', () => {
+    it('renders modal with headline and benefits', () => {
+      render(
+        <UpgradePrompt
+          variant="modal"
+          targetTier="pro"
+          source="test"
+          onDismiss={() => {}}
+        />
+      )
+
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByText('Upgrade to Pro')).toBeInTheDocument()
+      expect(screen.getByText('20 posters/month')).toBeInTheDocument()
+    })
+
+    it('calls onDismiss when close button clicked', async () => {
+      const onDismiss = vi.fn()
+      const user = userEvent.setup()
+
+      render(
+        <UpgradePrompt
+          variant="modal"
+          targetTier="premium"
+          source="test"
+          onDismiss={onDismiss}
+        />
+      )
+
+      const closeButton = screen.getByRole('button', { name: /close/i })
+      await user.click(closeButton)
+
+      expect(onDismiss).toHaveBeenCalledTimes(1)
+    })
+  })
 })

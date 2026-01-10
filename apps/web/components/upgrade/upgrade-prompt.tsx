@@ -4,6 +4,12 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import { Sparkles, X, Crown, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { track } from '@/lib/analytics'
 import { getTierBenefits, getTierHeadline, type TargetTier } from './tier-benefits'
 import { cn } from '@/lib/utils'
@@ -98,6 +104,34 @@ export function UpgradePrompt({
           </Link>
         </Button>
       </div>
+    )
+  }
+
+  if (variant === 'modal') {
+    return (
+      <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
+        <DialogContent className="border-gold-500/20 bg-surface-900 sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <Crown className="h-6 w-6 text-gold-500" />
+              <DialogTitle className="font-display text-2xl">{headline}</DialogTitle>
+            </div>
+          </DialogHeader>
+          <ul className="my-4 space-y-3">
+            {benefits.map((benefit) => (
+              <li key={benefit} className="flex items-center gap-2 text-surface-300">
+                <Check className="h-5 w-5 text-gold-500" />
+                {benefit}
+              </li>
+            ))}
+          </ul>
+          <Button asChild className="w-full bg-gold-500 hover:bg-gold-600 text-surface-950">
+            <Link href="/pricing" onClick={handleCtaClick}>
+              Upgrade Now
+            </Link>
+          </Button>
+        </DialogContent>
+      </Dialog>
     )
   }
 
