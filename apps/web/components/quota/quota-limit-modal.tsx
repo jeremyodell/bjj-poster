@@ -71,26 +71,30 @@ export function QuotaLimitModal({
         >
         <DialogHeader>
           <DialogTitle className="text-center text-2xl font-display">
-            🎉 You've created {posterCount} awesome posters this month!
+            {posterCount > 0
+              ? `🎉 You've created ${posterCount} awesome posters this month!`
+              : `🎉 You've hit your monthly limit!`}
           </DialogTitle>
         </DialogHeader>
 
         {/* Poster Gallery */}
-        <div className="flex justify-center gap-3 py-4">
-          {posters.slice(0, 3).map((poster) => (
-            <div
-              key={poster.id}
-              className="relative h-24 w-20 overflow-hidden rounded-lg border border-surface-700 shadow-lg"
-            >
-              <Image
-                src={poster.thumbnailUrl}
-                alt={`${poster.athleteName} poster`}
-                fill
-                className="object-cover"
-              />
-            </div>
-          ))}
-        </div>
+        {posters.length > 0 && (
+          <div className="flex justify-center gap-3 py-4">
+            {posters.slice(0, 3).map((poster) => (
+              <div
+                key={poster.id}
+                className="relative h-24 w-20 overflow-hidden rounded-lg border border-surface-700 shadow-lg"
+              >
+                <Image
+                  src={poster.thumbnailUrl}
+                  alt={`${poster.athleteName} poster`}
+                  fill
+                  className="object-cover"
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
         <DialogDescription className="text-center text-lg text-surface-200">
           Ready for more?
