@@ -125,4 +125,44 @@ describe('QuotaLimitModal', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
+
+  describe('button callbacks', () => {
+    it('calls onUpgrade when upgrade button clicked', async () => {
+      vi.useRealTimers() // Use real timers for this test
+      const onUpgrade = vi.fn()
+      const user = userEvent.setup()
+
+      render(
+        <QuotaLimitModal
+          open={true}
+          posters={mockPosters}
+          onUpgrade={onUpgrade}
+          onMaybeLater={vi.fn()}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /upgrade now/i }))
+
+      expect(onUpgrade).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onMaybeLater when Maybe Later clicked', async () => {
+      vi.useRealTimers() // Use real timers for this test
+      const onMaybeLater = vi.fn()
+      const user = userEvent.setup()
+
+      render(
+        <QuotaLimitModal
+          open={true}
+          posters={mockPosters}
+          onUpgrade={vi.fn()}
+          onMaybeLater={onMaybeLater}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /maybe later/i }))
+
+      expect(onMaybeLater).toHaveBeenCalledTimes(1)
+    })
+  })
 })
