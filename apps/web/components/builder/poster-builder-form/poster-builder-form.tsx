@@ -1,16 +1,31 @@
 'use client';
 
+import { useEffect } from 'react';
 import {
   PhotoUploadZone,
   AthleteInfoFields,
   TournamentInfoFields,
   TemplateSelector,
 } from '@/components/builder';
+import { GuidedTooltips, useBuilderTour } from '@/components/onboarding';
+import { usePosterBuilderStore } from '@/lib/stores';
 import { GenerateButton } from './generate-button';
 import { FloatingPreviewButton } from './floating-preview-button';
 import { PreviewModal } from './preview-modal';
 
 export function PosterBuilderForm(): JSX.Element {
+  const { showTour, isLoading, completeTour, skipTour } = useBuilderTour();
+  const initializeForFirstVisit = usePosterBuilderStore(
+    (state) => state.initializeForFirstVisit
+  );
+
+  // Initialize sample data for first-time visitors
+  useEffect(() => {
+    if (showTour && !isLoading) {
+      initializeForFirstVisit();
+    }
+  }, [showTour, isLoading, initializeForFirstVisit]);
+
   return (
     <div className="space-y-8 pb-24 md:pb-8">
       {/* Photo Upload Section */}
@@ -50,6 +65,15 @@ export function PosterBuilderForm(): JSX.Element {
 
       {/* Preview Modal */}
       <PreviewModal />
+
+      {/* Guided Tour for First-Time Users */}
+      {!isLoading && (
+        <GuidedTooltips
+          run={showTour}
+          onComplete={completeTour}
+          onSkip={skipTour}
+        />
+      )}
     </div>
   );
 }
