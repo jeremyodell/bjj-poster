@@ -16,6 +16,16 @@ vi.mock('@/lib/stores', () => ({
   UNLIMITED: -1,
 }));
 
+// Mock WelcomeSplash to avoid localStorage in tests
+vi.mock('@/components/onboarding', () => ({
+  WelcomeSplash: () => <div data-testid="welcome-splash">WelcomeSplash</div>,
+}));
+
+// Mock UpgradeSuccessHandler to avoid next/navigation in tests
+vi.mock('@/components/checkout', () => ({
+  UpgradeSuccessHandler: () => <div data-testid="upgrade-handler">UpgradeSuccessHandler</div>,
+}));
+
 describe('Dashboard Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -38,6 +48,11 @@ describe('Dashboard Page', () => {
     it('renders the welcome section', () => {
       render(<DashboardPage />);
       expect(screen.getByText(/welcome back/i)).toBeInTheDocument();
+    });
+
+    it('renders the WelcomeSplash component', () => {
+      render(<DashboardPage />);
+      expect(screen.getByTestId('welcome-splash')).toBeInTheDocument();
     });
 
     it('renders the create new poster card', () => {
