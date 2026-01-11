@@ -4,7 +4,7 @@
  */
 
 import express, { Request, Response, NextFunction } from 'express';
-import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
+import type { APIGatewayProxyEvent, Context } from 'aws-lambda';
 
 // Import handlers as they're created
 import { handler as helloHandler } from './handlers/hello/index.js';
@@ -31,7 +31,7 @@ app.use((req, res, next) => {
 });
 
 // Request logging
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
   next();
 });
@@ -125,7 +125,7 @@ function lambdaAdapter(handler: LambdaHandler) {
 // ===========================================
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -158,7 +158,7 @@ app.get('/api/users/:id', (req, res) => {
 // Templates - real handler using database
 app.get('/api/templates', lambdaAdapter(listTemplatesHandler));
 
-app.get('/api/posters', (req, res) => {
+app.get('/api/posters', (_req, res) => {
   res.json([]);
 });
 
@@ -170,7 +170,7 @@ app.post('/api/payments/checkout', lambdaAdapter(createCheckoutSessionHandler));
 app.post('/api/payments/webhook', lambdaAdapter(stripeWebhookHandler));
 
 // Error handler
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Unhandled error:', err);
   res.status(500).json({
     message: 'Internal server error',
