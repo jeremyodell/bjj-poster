@@ -36,6 +36,7 @@ vi.mock('@/lib/stores/poster-builder-store', () => ({
   usePosterBuilderStore: {
     getState: () => ({
       loadFromPoster: vi.fn(),
+      initializeForFirstVisit: vi.fn(),
     }),
   },
 }));

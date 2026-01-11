@@ -27,6 +27,7 @@ const createMockState = (overrides = {}) => ({
   reset: vi.fn(),
   generatePoster: vi.fn().mockResolvedValue({ posterId: '123', imageUrl: '/poster.png', createdAt: '' }),
   loadFromPoster: vi.fn(),
+      initializeForFirstVisit: vi.fn(),
   ...overrides,
 });
 

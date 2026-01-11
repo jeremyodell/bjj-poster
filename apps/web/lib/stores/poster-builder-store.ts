@@ -101,6 +101,11 @@ export interface PosterBuilderActions {
    * Clears athletePhoto since it cannot be duplicated.
    */
   loadFromPoster: (data: LoadFromPosterData) => void;
+  /**
+   * Initializes the form with sample data for first-time visitors.
+   * Only sets fields that are currently empty/default.
+   */
+  initializeForFirstVisit: () => void;
 }
 
 export type PosterBuilderStore = PosterBuilderState & PosterBuilderActions;
@@ -212,6 +217,24 @@ export const usePosterBuilderStore = create<PosterBuilderStore>()(
             isGenerating: false,
             generationProgress: 0,
           }),
+
+        initializeForFirstVisit: () => {
+          const state = get();
+          // Only initialize if fields are still default/empty
+          if (
+            state.athleteName === '' &&
+            state.beltRank === 'white' &&
+            state.tournament === '' &&
+            state.selectedTemplateId === null
+          ) {
+            set({
+              athleteName: 'Your Name Here',
+              beltRank: 'black',
+              tournament: 'Your Tournament',
+              selectedTemplateId: 'template-1',
+            });
+          }
+        },
       }),
       {
         name: 'poster-builder-draft',
