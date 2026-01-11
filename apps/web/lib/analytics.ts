@@ -6,6 +6,10 @@ export type AnalyticsEvent =
   | 'quota_limit_modal_viewed'
   | 'quota_limit_upgrade_clicked'
   | 'quota_limit_maybe_later_clicked'
+  | 'first_poster_celebration_viewed'
+  | 'first_poster_downloaded'
+  | 'first_poster_shared'
+  | 'first_poster_celebration_dismissed'
 
 export interface UpgradePromptProperties {
   source: string
@@ -20,7 +24,13 @@ export interface QuotaLimitProperties {
   nextResetDate?: string
 }
 
-export type EventProperties = UpgradePromptProperties | QuotaLimitProperties
+export interface FirstPosterCelebrationProperties {
+  tier?: string
+  platform?: 'facebook' | 'native_share' | 'copy_link'
+  source?: string
+}
+
+export type EventProperties = UpgradePromptProperties | QuotaLimitProperties | FirstPosterCelebrationProperties
 
 export function track(event: AnalyticsEvent, properties: EventProperties): void {
   // Development: log to console
