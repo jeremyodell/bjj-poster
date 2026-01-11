@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { CheckoutButton, UpgradeSuccessHandler } from '@/components/checkout';
 import { cn } from '@/lib/utils';
 
 type BillingPeriod = 'monthly' | 'annual';
@@ -204,9 +205,20 @@ function PricingCard({ tier, billingPeriod }: PricingCardProps) {
         </ul>
       </CardContent>
       <CardFooter>
-        <Button asChild variant={tier.popular ? 'default' : 'outline'} className="w-full">
-          <Link href={tier.ctaLink}>{tier.cta}</Link>
-        </Button>
+        {tier.monthlyPrice === 0 ? (
+          <Button asChild variant={tier.popular ? 'default' : 'outline'} className="w-full">
+            <Link href={tier.ctaLink}>{tier.cta}</Link>
+          </Button>
+        ) : (
+          <CheckoutButton
+            tier={tier.name.toLowerCase() as 'pro' | 'premium'}
+            interval={billingPeriod === 'monthly' ? 'month' : 'year'}
+            variant={tier.popular ? 'default' : 'outline'}
+            className="w-full"
+          >
+            {tier.cta}
+          </CheckoutButton>
+        )}
       </CardFooter>
     </Card>
   );
@@ -217,6 +229,7 @@ export default function PricingPage() {
 
   return (
     <main className="min-h-screen bg-primary-900 px-6 py-20 lg:px-8">
+      <UpgradeSuccessHandler />
       <div className="mx-auto max-w-7xl">
         <div className="text-center">
           <h1 className="font-display text-4xl text-white sm:text-5xl">
