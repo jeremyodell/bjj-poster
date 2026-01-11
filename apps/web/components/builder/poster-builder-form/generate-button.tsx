@@ -2,6 +2,7 @@
 
 import { Loader2, Sparkles, ArrowRight } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
+import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -11,9 +12,16 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { usePosterBuilderStore } from '@/lib/stores';
+import { useUserStore } from '@/lib/stores/user-store';
+import { useFirstPosterCelebration } from '@/components/onboarding';
 import { cn } from '@/lib/utils';
 
 export function GenerateButton(): JSX.Element {
+  const router = useRouter();
+  const { triggerCelebration } = useFirstPosterCelebration();
+  const postersThisMonth = useUserStore((s) => s.postersThisMonth);
+  const incrementUsage = useUserStore((s) => s.incrementUsage);
+
   const {
     athletePhoto,
     athleteName,
@@ -50,8 +58,20 @@ export function GenerateButton(): JSX.Element {
     if (isDisabled) return;
 
     try {
-      await generatePoster();
-      // TODO: Handle success (show result, navigate to poster)
+      const result = await generatePoster();
+
+      // Check if this is the user's first poster
+      if (postersThisMonth === 0) {
+        // Show celebration (don't increment usage yet - dismiss will do it)
+        triggerCelebration({
+          imageUrl: result.imageUrl,
+          posterId: result.posterId,
+        });
+      } else {
+        // Normal flow: increment usage and navigate
+        incrementUsage();
+        router.push('/dashboard');
+      }
     } catch (error) {
       // TODO: Show error toast
       console.error('Generation failed:', error);

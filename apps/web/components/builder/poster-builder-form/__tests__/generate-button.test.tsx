@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GenerateButton } from '../generate-button';
 import { usePosterBuilderStore } from '@/lib/stores';
+import { useUserStore } from '@/lib/stores/user-store';
+import { useFirstPosterCelebration } from '@/components/onboarding';
 
 // Mock the store
 const createMockState = (overrides = {}) => ({
@@ -35,6 +37,33 @@ vi.mock('@/lib/stores', () => ({
   usePosterBuilderStore: vi.fn((selector) => {
     const state = createMockState();
     return selector ? selector(state) : state;
+  }),
+}));
+
+// Mock user store
+const mockIncrementUsage = vi.fn();
+vi.mock('@/lib/stores/user-store', () => ({
+  useUserStore: vi.fn((selector) =>
+    selector({
+      postersThisMonth: 0,
+      incrementUsage: mockIncrementUsage,
+    })
+  ),
+}));
+
+// Mock first poster celebration hook
+const mockTriggerCelebration = vi.fn();
+vi.mock('@/components/onboarding', () => ({
+  useFirstPosterCelebration: vi.fn(() => ({
+    triggerCelebration: mockTriggerCelebration,
+  })),
+}));
+
+// Mock router
+const mockPush = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
   }),
 }));
 
@@ -117,7 +146,7 @@ describe('GenerateButton', () => {
 
       await waitFor(() => {
         // Radix renders multiple elements for accessibility, so use getAllBy
-        const tooltips = screen.getAllByText(/complete required fields/i);
+        const tooltips = screen.getAllByText(/complete all required fields/i);
         expect(tooltips.length).toBeGreaterThan(0);
       });
     });
@@ -217,6 +246,92 @@ describe('GenerateButton', () => {
       render(<GenerateButton />);
 
       expect(screen.getByRole('button')).toBeDisabled();
+    });
+  });
+
+  describe('first poster celebration', () => {
+    it('triggers celebration for first poster (postersThisMonth === 0)', async () => {
+      const mockGeneratePoster = vi.fn().mockResolvedValue({
+        posterId: '123',
+        imageUrl: '/test-poster.png',
+        createdAt: new Date().toISOString(),
+      });
+
+      vi.mocked(usePosterBuilderStore).mockImplementation((selector) => {
+        const state = createMockState({
+          athletePhoto: new File([''], 'photo.jpg'),
+          athleteName: 'John Doe',
+          beltRank: 'purple',
+          tournament: 'IBJJF Worlds',
+          selectedTemplateId: 'template-1',
+          generatePoster: mockGeneratePoster,
+        });
+        return selector ? selector(state) : state;
+      });
+
+      vi.mocked(useUserStore).mockImplementation((selector) =>
+        selector({
+          postersThisMonth: 0,
+          incrementUsage: mockIncrementUsage,
+        })
+      );
+
+      const user = userEvent.setup();
+      render(<GenerateButton />);
+
+      await user.click(screen.getByRole('button'));
+
+      await waitFor(() => {
+        expect(mockTriggerCelebration).toHaveBeenCalledWith({
+          imageUrl: '/test-poster.png',
+          posterId: '123',
+        });
+      });
+
+      // Should NOT increment usage (celebration dismiss handles this)
+      expect(mockIncrementUsage).not.toHaveBeenCalled();
+      // Should NOT navigate (celebration dismiss handles this)
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('navigates normally for subsequent posters', async () => {
+      const mockGeneratePoster = vi.fn().mockResolvedValue({
+        posterId: '456',
+        imageUrl: '/poster.png',
+        createdAt: new Date().toISOString(),
+      });
+
+      vi.mocked(usePosterBuilderStore).mockImplementation((selector) => {
+        const state = createMockState({
+          athletePhoto: new File([''], 'photo.jpg'),
+          athleteName: 'John Doe',
+          beltRank: 'purple',
+          tournament: 'IBJJF Worlds',
+          selectedTemplateId: 'template-1',
+          generatePoster: mockGeneratePoster,
+        });
+        return selector ? selector(state) : state;
+      });
+
+      vi.mocked(useUserStore).mockImplementation((selector) =>
+        selector({
+          postersThisMonth: 1,
+          incrementUsage: mockIncrementUsage,
+        })
+      );
+
+      const user = userEvent.setup();
+      render(<GenerateButton />);
+
+      await user.click(screen.getByRole('button'));
+
+      await waitFor(() => {
+        expect(mockIncrementUsage).toHaveBeenCalled();
+        expect(mockPush).toHaveBeenCalledWith('/dashboard');
+      });
+
+      // Should NOT trigger celebration
+      expect(mockTriggerCelebration).not.toHaveBeenCalled();
     });
   });
 });
