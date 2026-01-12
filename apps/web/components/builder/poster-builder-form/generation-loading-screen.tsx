@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Award } from 'lucide-react';
 
 const TIPS = [
@@ -16,7 +16,16 @@ interface GenerationLoadingScreenProps {
 }
 
 export function GenerationLoadingScreen({ progress }: GenerationLoadingScreenProps): JSX.Element {
-  const [tipIndex] = useState(0);
+  const [tipIndex, setTipIndex] = useState(0);
+
+  // Rotate tips every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTipIndex((prev) => (prev + 1) % TIPS.length);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div

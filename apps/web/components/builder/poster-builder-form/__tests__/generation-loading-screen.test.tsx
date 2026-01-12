@@ -1,8 +1,16 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { render, screen, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GenerationLoadingScreen } from '../generation-loading-screen';
 
 describe('GenerationLoadingScreen', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders loading screen with progress', () => {
     render(<GenerationLoadingScreen progress={50} />);
 
@@ -45,5 +53,39 @@ describe('GenerationLoadingScreen', () => {
 
     // Should show the first tip
     expect(screen.getByText(/pro tip|did you know|upgrade to pro|premium users/i)).toBeInTheDocument();
+  });
+
+  it('rotates tips every 5 seconds', () => {
+    render(<GenerationLoadingScreen progress={50} />);
+
+    expect(screen.getByText(/pro tip: remove backgrounds/i)).toBeInTheDocument();
+
+    // Advance 5 seconds
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    // Should now show second tip
+    expect(screen.getByText(/did you know\? pro users get hd/i)).toBeInTheDocument();
+
+    // Advance another 5 seconds
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    // Should now show third tip
+    expect(screen.getByText(/upgrade to pro to remove watermarks/i)).toBeInTheDocument();
+  });
+
+  it('cycles tips back to first after last tip', () => {
+    render(<GenerationLoadingScreen progress={50} />);
+
+    // Advance through all 5 tips (25 seconds)
+    act(() => {
+      vi.advanceTimersByTime(25000);
+    });
+
+    // Should be back to first tip
+    expect(screen.getByText(/pro tip: remove backgrounds/i)).toBeInTheDocument();
   });
 });
