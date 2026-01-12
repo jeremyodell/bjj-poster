@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
 import { Award } from 'lucide-react';
 
 const TIPS = [
-  "💡 Pro tip: Remove backgrounds for cleaner posters (Pro feature)",
-  "💡 Did you know? Pro users get HD 1080p exports",
-  "💡 Upgrade to Pro to remove watermarks",
-  "💡 Premium users can create unlimited posters",
-  "💡 Pro includes background removal for cleaner photos",
+  "Pro tip: Remove backgrounds for cleaner posters (Pro feature)",
+  "Did you know? Pro users get HD 1080p exports",
+  "Upgrade to Pro to remove watermarks",
+  "Premium users can create unlimited posters",
+  "Pro includes background removal for cleaner photos",
 ];
 
 interface GenerationLoadingScreenProps {
@@ -18,6 +18,13 @@ interface GenerationLoadingScreenProps {
 export function GenerationLoadingScreen({ progress }: GenerationLoadingScreenProps): JSX.Element {
   const [tipIndex, setTipIndex] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Reset state on mount to ensure fresh state for each generation session.
+  // This handles the case where the component might be reused without full unmount.
+  useEffect(() => {
+    setTipIndex(0);
+    setElapsedSeconds(0);
+  }, []);
 
   // Rotate tips every 5 seconds
   useEffect(() => {
@@ -79,12 +86,20 @@ export function GenerationLoadingScreen({ progress }: GenerationLoadingScreenPro
         </div>
 
         {/* Progress percentage */}
-        <div className="mb-6 text-right">
+        <div
+          className="mb-6 text-right"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <span className="font-mono text-lg text-gold-400">{progress}%</span>
         </div>
 
         {/* Rotating Tips */}
-        <div className="min-h-[3rem] px-4">
+        <div
+          className="min-h-[3rem] px-4"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <p
             key={tipIndex}
             className="text-sm text-surface-300 animate-fade-in"
@@ -94,7 +109,11 @@ export function GenerationLoadingScreen({ progress }: GenerationLoadingScreenPro
         </div>
 
         {/* Time Estimate */}
-        <p className="mt-4 text-sm text-surface-400">
+        <p
+          className="mt-4 text-sm text-surface-400"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           {timeMessage}
         </p>
       </div>
