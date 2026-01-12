@@ -108,4 +108,51 @@ describe('GenerationLoadingScreen', () => {
     expect(screen.getByText(/almost done! a few more seconds/i)).toBeInTheDocument();
     expect(screen.queryByText(/usually takes 15-20 seconds/i)).not.toBeInTheDocument();
   });
+
+  describe('timeout handling', () => {
+    it('calls onTimeout after 60 seconds', () => {
+      const onTimeout = vi.fn();
+      render(<GenerationLoadingScreen progress={50} onTimeout={onTimeout} />);
+
+      // Advance time to 60 seconds
+      act(() => {
+        vi.advanceTimersByTime(60000);
+      });
+
+      expect(onTimeout).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call onTimeout before 60 seconds', () => {
+      const onTimeout = vi.fn();
+      render(<GenerationLoadingScreen progress={50} onTimeout={onTimeout} />);
+
+      act(() => {
+        vi.advanceTimersByTime(59000);
+      });
+
+      expect(onTimeout).not.toHaveBeenCalled();
+    });
+
+    it('shows timeout message after 60 seconds', () => {
+      render(<GenerationLoadingScreen progress={50} onTimeout={vi.fn()} />);
+
+      act(() => {
+        vi.advanceTimersByTime(60000);
+      });
+
+      expect(screen.getByText(/taking longer than usual/i)).toBeInTheDocument();
+    });
+
+    it('only calls onTimeout once even after more time passes', () => {
+      const onTimeout = vi.fn();
+      render(<GenerationLoadingScreen progress={50} onTimeout={onTimeout} />);
+
+      // Advance past timeout
+      act(() => {
+        vi.advanceTimersByTime(120000);
+      });
+
+      expect(onTimeout).toHaveBeenCalledTimes(1);
+    });
+  });
 });
