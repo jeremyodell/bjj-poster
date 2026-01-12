@@ -22,9 +22,44 @@ vi.mock('../preview-modal', () => ({
   PreviewModal: () => <div data-testid="preview-modal">Preview Modal</div>,
 }));
 
+vi.mock('../generation-loading-screen', () => ({
+  GenerationLoadingScreen: ({ progress }: { progress: number }) => (
+    <div data-testid="generation-loading-screen" role="dialog" aria-label="Generating poster">
+      Loading: {progress}%
+    </div>
+  ),
+}));
+
+// Mock the poster builder store
+const mockUsePosterBuilderStore = vi.fn();
+vi.mock('@/lib/stores', () => ({
+  usePosterBuilderStore: (selector: (state: unknown) => unknown) => mockUsePosterBuilderStore(selector),
+}));
+
+// Mock onboarding components
+vi.mock('@/components/onboarding', () => ({
+  GuidedTooltips: () => <div data-testid="guided-tooltips">Guided Tooltips</div>,
+  useBuilderTour: () => ({
+    showTour: false,
+    isLoading: false,
+    completeTour: vi.fn(),
+    skipTour: vi.fn(),
+  }),
+  FirstPosterCelebration: () => <div data-testid="first-poster-celebration">Celebration</div>,
+}));
+
+const defaultStoreState = {
+  initializeForFirstVisit: vi.fn(),
+  isGenerating: false,
+  generationProgress: 0,
+};
+
 describe('PosterBuilderForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUsePosterBuilderStore.mockImplementation((selector) =>
+      selector(defaultStoreState)
+    );
   });
 
   it('renders PhotoUploadZone', () => {
@@ -68,5 +103,34 @@ describe('PosterBuilderForm', () => {
     const generateButtonWrapper = screen.getByTestId('generate-button-wrapper');
     expect(generateButtonWrapper).toHaveClass('sticky');
     expect(generateButtonWrapper).toHaveClass('bottom-0');
+  });
+
+  it('shows loading screen when isGenerating is true', () => {
+    mockUsePosterBuilderStore.mockImplementation((selector) =>
+      selector({
+        ...defaultStoreState,
+        isGenerating: true,
+        generationProgress: 45,
+      })
+    );
+
+    render(<PosterBuilderForm />);
+
+    expect(screen.getByRole('dialog', { name: /generating poster/i })).toBeInTheDocument();
+    expect(screen.getByText('Loading: 45%')).toBeInTheDocument();
+  });
+
+  it('hides loading screen when isGenerating is false', () => {
+    mockUsePosterBuilderStore.mockImplementation((selector) =>
+      selector({
+        ...defaultStoreState,
+        isGenerating: false,
+        generationProgress: 0,
+      })
+    );
+
+    render(<PosterBuilderForm />);
+
+    expect(screen.queryByRole('dialog', { name: /generating poster/i })).not.toBeInTheDocument();
   });
 });

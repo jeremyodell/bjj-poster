@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   PhotoUploadZone,
   AthleteInfoFields,
@@ -12,11 +13,16 @@ import { usePosterBuilderStore } from '@/lib/stores';
 import { GenerateButton } from './generate-button';
 import { FloatingPreviewButton } from './floating-preview-button';
 import { PreviewModal } from './preview-modal';
+import { GenerationLoadingScreen } from './generation-loading-screen';
 
 export function PosterBuilderForm(): JSX.Element {
   const { showTour, isLoading, completeTour, skipTour } = useBuilderTour();
-  const initializeForFirstVisit = usePosterBuilderStore(
-    (state) => state.initializeForFirstVisit
+  const { initializeForFirstVisit, isGenerating, generationProgress } = usePosterBuilderStore(
+    useShallow((state) => ({
+      initializeForFirstVisit: state.initializeForFirstVisit,
+      isGenerating: state.isGenerating,
+      generationProgress: state.generationProgress,
+    }))
   );
 
   // Initialize sample data for first-time visitors
@@ -68,6 +74,9 @@ export function PosterBuilderForm(): JSX.Element {
 
       {/* First Poster Celebration Modal */}
       <FirstPosterCelebration />
+
+      {/* Generation Loading Screen */}
+      {isGenerating && <GenerationLoadingScreen progress={generationProgress} />}
 
       {/* Guided Tour for First-Time Users */}
       {!isLoading && (
