@@ -9,4 +9,10 @@ describe('GenerationLoadingScreen', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('50%')).toBeInTheDocument();
   });
+
+  it('renders belt animation icon', () => {
+    render(<GenerationLoadingScreen progress={0} />);
+
+    expect(screen.getByTestId('belt-animation')).toBeInTheDocument();
+  });
 });
