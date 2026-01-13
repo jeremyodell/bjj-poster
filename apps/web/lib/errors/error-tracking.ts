@@ -21,7 +21,10 @@ export function trackError(type: ErrorType, context?: ErrorContext): void {
     url: typeof window !== 'undefined' ? window.location.pathname : undefined,
   };
 
-  console.error('[Error Tracked]', errorEvent);
+  // Log to console in development only
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('[Error Tracked]', errorEvent);
+  }
 
   // TODO: Send to analytics service (Amplitude, Segment, etc.)
 }

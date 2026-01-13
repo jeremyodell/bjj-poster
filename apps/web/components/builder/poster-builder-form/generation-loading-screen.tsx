@@ -12,25 +12,31 @@ const TIPS = [
   "Pro includes background removal for cleaner photos",
 ];
 
-const TIMEOUT_SECONDS = 60;
+const DEFAULT_TIMEOUT_SECONDS = 60;
 
 interface GenerationLoadingScreenProps {
   progress: number;
   onTimeout?: () => void;
+  timeoutSeconds?: number;
 }
 
-export function GenerationLoadingScreen({ progress, onTimeout }: GenerationLoadingScreenProps): JSX.Element {
+export function GenerationLoadingScreen({
+  progress,
+  onTimeout,
+  timeoutSeconds = DEFAULT_TIMEOUT_SECONDS,
+}: GenerationLoadingScreenProps): JSX.Element {
   const [tipIndex, setTipIndex] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [hasTimedOut, setHasTimedOut] = useState(false);
   const timeoutCalledRef = useRef(false);
+
+  // Derive hasTimedOut from elapsedSeconds to avoid state duplication
+  const hasTimedOut = elapsedSeconds >= timeoutSeconds;
 
   // Reset state on mount to ensure fresh state for each generation session.
   // This handles the case where the component might be reused without full unmount.
   useEffect(() => {
     setTipIndex(0);
     setElapsedSeconds(0);
-    setHasTimedOut(false);
     timeoutCalledRef.current = false;
   }, []);
 
@@ -49,10 +55,9 @@ export function GenerationLoadingScreen({ progress, onTimeout }: GenerationLoadi
       setElapsedSeconds((prev) => {
         const newValue = prev + 1;
 
-        // Check for timeout
-        if (newValue >= TIMEOUT_SECONDS && !timeoutCalledRef.current) {
+        // Check for timeout - use ref to ensure callback only fires once
+        if (newValue >= timeoutSeconds && !timeoutCalledRef.current) {
           timeoutCalledRef.current = true;
-          setHasTimedOut(true);
           onTimeout?.();
         }
 
@@ -61,7 +66,7 @@ export function GenerationLoadingScreen({ progress, onTimeout }: GenerationLoadi
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [onTimeout]);
+  }, [onTimeout, timeoutSeconds]);
 
   const getTimeMessage = (): string => {
     if (hasTimedOut) {
