@@ -14,10 +14,13 @@ import {
 import { usePosterBuilderStore } from '@/lib/stores';
 import { useUserStore } from '@/lib/stores/user-store';
 import { useFirstPosterCelebration } from '@/components/onboarding';
+import { useOnlineStatus } from '@/hooks/use-online-status';
+import { showErrorToast, trackError, ERROR_MESSAGES } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 
 export function GenerateButton(): JSX.Element {
   const router = useRouter();
+  const isOnline = useOnlineStatus();
   const { triggerCelebration } = useFirstPosterCelebration();
   const postersThisMonth = useUserStore((s) => s.postersThisMonth);
   const incrementUsage = useUserStore((s) => s.incrementUsage);
@@ -52,7 +55,7 @@ export function GenerateButton(): JSX.Element {
     selectedTemplateId
   );
 
-  const isDisabled = !isValid || isGenerating;
+  const isDisabled = !isValid || isGenerating || !isOnline;
 
   const handleClick = async () => {
     if (isDisabled) return;
@@ -73,9 +76,22 @@ export function GenerateButton(): JSX.Element {
         router.push('/dashboard');
       }
     } catch (error) {
-      // TODO: Show error toast
+      trackError('generation_api_failure', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      showErrorToast(ERROR_MESSAGES.GENERATION_API_FAILURE, {
+        action: {
+          label: 'Try Again',
+          onClick: handleClick,
+        },
+      });
       console.error('Generation failed:', error);
     }
+  };
+
+  const getTooltipMessage = (): string => {
+    if (!isOnline) return "You're offline. Reconnect to generate.";
+    return 'Complete all required fields to generate';
   };
 
   const buttonContent = isGenerating ? (
@@ -100,7 +116,7 @@ export function GenerateButton(): JSX.Element {
         onClick={handleClick}
         className={cn(
           'group w-full',
-          isValid && !isGenerating && 'animate-pulse-gold'
+          isValid && !isGenerating && isOnline && 'animate-pulse-gold'
         )}
       >
         {buttonContent}
@@ -109,7 +125,7 @@ export function GenerateButton(): JSX.Element {
   );
 
   // Wrap disabled button in tooltip
-  if (!isValid && !isGenerating) {
+  if ((!isValid || !isOnline) && !isGenerating) {
     return (
       <TooltipProvider>
         <Tooltip>
@@ -122,7 +138,7 @@ export function GenerateButton(): JSX.Element {
             side="top"
             className="border-surface-700 bg-surface-800 text-white"
           >
-            <p className="text-sm">Complete all required fields to generate</p>
+            <p className="text-sm">{getTooltipMessage()}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

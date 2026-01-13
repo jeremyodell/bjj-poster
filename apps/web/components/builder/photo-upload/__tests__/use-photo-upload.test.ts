@@ -1,6 +1,23 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { usePhotoUpload } from '../use-photo-upload';
+import { trackError } from '@/lib/errors';
+
+vi.mock('@/lib/errors', () => ({
+  trackError: vi.fn(),
+  ERROR_MESSAGES: {
+    PHOTO_TOO_LARGE: {
+      title: 'Photo is too large',
+      description: 'Try a smaller file or compress it.',
+      emoji: '📸',
+    },
+    PHOTO_INVALID_FORMAT: {
+      title: 'Unsupported format',
+      description: 'We only support JPG, PNG, and HEIC photos.',
+      emoji: '❌',
+    },
+  },
+}));
 
 // Mock URL.createObjectURL and URL.revokeObjectURL
 const mockCreateObjectURL = vi.fn(() => 'blob:mock-url');
@@ -79,7 +96,7 @@ describe('usePhotoUpload', () => {
         await result.current.handleFile(file);
       });
 
-      expect(result.current.error).toBe('File must be under 10MB');
+      expect(result.current.error).toContain('Photo is too large');
       expect(result.current.file).toBeNull();
       expect(result.current.preview).toBeNull();
     });
@@ -92,7 +109,7 @@ describe('usePhotoUpload', () => {
         await result.current.handleFile(file);
       });
 
-      expect(result.current.error).toBe('File must be JPG, PNG, or HEIC');
+      expect(result.current.error).toContain('Unsupported format');
       expect(result.current.file).toBeNull();
     });
 
@@ -104,7 +121,7 @@ describe('usePhotoUpload', () => {
         await result.current.handleFile(file);
       });
 
-      expect(result.current.error).toBe('File must be JPG, PNG, or HEIC');
+      expect(result.current.error).toContain('Unsupported format');
     });
   });
 
@@ -181,6 +198,57 @@ describe('usePhotoUpload', () => {
       unmount();
 
       expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:unmount-url');
+    });
+  });
+
+  describe('error tracking', () => {
+    it('tracks error when file is too large', async () => {
+      const { result } = renderHook(() => usePhotoUpload());
+      const largeFile = createMockFile('large.jpg', 11 * 1024 * 1024, 'image/jpeg');
+
+      await act(async () => {
+        await result.current.handleFile(largeFile);
+      });
+
+      expect(trackError).toHaveBeenCalledWith('photo_too_large', expect.objectContaining({
+        fileSize: 11 * 1024 * 1024,
+        maxSize: 10 * 1024 * 1024,
+      }));
+    });
+
+    it('tracks error when file format is invalid', async () => {
+      const { result } = renderHook(() => usePhotoUpload());
+      const gifFile = createMockFile('image.gif', 1024, 'image/gif');
+
+      await act(async () => {
+        await result.current.handleFile(gifFile);
+      });
+
+      expect(trackError).toHaveBeenCalledWith('photo_invalid_format', expect.objectContaining({
+        fileType: 'image/gif',
+      }));
+    });
+
+    it('uses user-friendly error message for file too large', async () => {
+      const { result } = renderHook(() => usePhotoUpload());
+      const largeFile = createMockFile('large.jpg', 11 * 1024 * 1024, 'image/jpeg');
+
+      await act(async () => {
+        await result.current.handleFile(largeFile);
+      });
+
+      expect(result.current.error).toContain('Photo is too large');
+    });
+
+    it('uses user-friendly error message for invalid format', async () => {
+      const { result } = renderHook(() => usePhotoUpload());
+      const gifFile = createMockFile('image.gif', 1024, 'image/gif');
+
+      await act(async () => {
+        await result.current.handleFile(gifFile);
+      });
+
+      expect(result.current.error).toContain('Unsupported format');
     });
   });
 });

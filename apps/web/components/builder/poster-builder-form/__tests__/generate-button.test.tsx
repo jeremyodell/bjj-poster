@@ -4,6 +4,29 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GenerateButton } from '../generate-button';
 import { usePosterBuilderStore } from '@/lib/stores';
 import { useUserStore } from '@/lib/stores/user-store';
+import { showErrorToast, trackError } from '@/lib/errors';
+import { useOnlineStatus } from '@/hooks/use-online-status';
+
+vi.mock('@/lib/errors', () => ({
+  showErrorToast: vi.fn(),
+  trackError: vi.fn(),
+  ERROR_MESSAGES: {
+    GENERATION_API_FAILURE: {
+      title: 'Something went wrong',
+      description: "We've been notified and are looking into it.",
+      emoji: '😓',
+    },
+    OFFLINE: {
+      title: "You're offline",
+      description: 'Reconnect to continue.',
+      emoji: '📡',
+    },
+  },
+}));
+
+vi.mock('@/hooks/use-online-status', () => ({
+  useOnlineStatus: vi.fn().mockReturnValue(true),
+}));
 
 // Mock the store
 const createMockState = (overrides = {}) => ({
@@ -343,6 +366,78 @@ describe('GenerateButton', () => {
 
       // Should NOT trigger celebration
       expect(mockTriggerCelebration).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('error handling', () => {
+    it('shows error toast when generation fails', async () => {
+      const mockGeneratePoster = vi.fn().mockRejectedValue(new Error('API Error'));
+      vi.mocked(usePosterBuilderStore).mockImplementation((selector) => {
+        const state = createMockState({
+          athletePhoto: new File([''], 'photo.jpg'),
+          athleteName: 'John Doe',
+          beltRank: 'purple',
+          tournament: 'IBJJF Worlds',
+          selectedTemplateId: 'template-1',
+          generatePoster: mockGeneratePoster,
+        });
+        return selector ? selector(state) : state;
+      });
+
+      const user = userEvent.setup();
+      render(<GenerateButton />);
+
+      await user.click(screen.getByRole('button'));
+
+      await waitFor(() => {
+        expect(trackError).toHaveBeenCalledWith('generation_api_failure', expect.objectContaining({
+          error: 'API Error',
+        }));
+        expect(showErrorToast).toHaveBeenCalled();
+      });
+    });
+
+    it('is disabled when offline', async () => {
+      vi.mocked(useOnlineStatus).mockReturnValue(false);
+      vi.mocked(usePosterBuilderStore).mockImplementation((selector) => {
+        const state = createMockState({
+          athletePhoto: new File([''], 'photo.jpg'),
+          athleteName: 'John Doe',
+          beltRank: 'purple',
+          tournament: 'IBJJF Worlds',
+          selectedTemplateId: 'template-1',
+        });
+        return selector ? selector(state) : state;
+      });
+
+      render(<GenerateButton />);
+
+      expect(screen.getByRole('button')).toBeDisabled();
+    });
+
+    it('shows offline tooltip when offline', async () => {
+      vi.mocked(useOnlineStatus).mockReturnValue(false);
+      vi.mocked(usePosterBuilderStore).mockImplementation((selector) => {
+        const state = createMockState({
+          athletePhoto: new File([''], 'photo.jpg'),
+          athleteName: 'John Doe',
+          beltRank: 'purple',
+          tournament: 'IBJJF Worlds',
+          selectedTemplateId: 'template-1',
+        });
+        return selector ? selector(state) : state;
+      });
+
+      const user = userEvent.setup();
+      render(<GenerateButton />);
+
+      const buttonWrapper = screen.getByRole('button').parentElement;
+      await user.hover(buttonWrapper!);
+
+      await waitFor(() => {
+        const tooltips = screen.getAllByText(/you're offline/i);
+        expect(tooltips.length).toBeGreaterThan(0);
+      });
     });
   });
 });

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { useRouter } from 'next/navigation';
 import {
   PhotoUploadZone,
   AthleteInfoFields,
@@ -10,12 +11,14 @@ import {
 } from '@/components/builder';
 import { GuidedTooltips, useBuilderTour, FirstPosterCelebration } from '@/components/onboarding';
 import { usePosterBuilderStore } from '@/lib/stores';
+import { showErrorToast, trackError, ERROR_MESSAGES } from '@/lib/errors';
 import { GenerateButton } from './generate-button';
 import { FloatingPreviewButton } from './floating-preview-button';
 import { PreviewModal } from './preview-modal';
 import { GenerationLoadingScreen } from './generation-loading-screen';
 
 export function PosterBuilderForm(): JSX.Element {
+  const router = useRouter();
   const { showTour, isLoading, completeTour, skipTour } = useBuilderTour();
   const { initializeForFirstVisit, isGenerating, generationProgress } = usePosterBuilderStore(
     useShallow((state) => ({
@@ -31,6 +34,18 @@ export function PosterBuilderForm(): JSX.Element {
       initializeForFirstVisit();
     }
   }, [showTour, isLoading, initializeForFirstVisit]);
+
+  const handleGenerationTimeout = useCallback(() => {
+    trackError('generation_timeout', {
+      progress: generationProgress,
+    });
+    showErrorToast(ERROR_MESSAGES.GENERATION_TIMEOUT, {
+      action: {
+        label: 'Go to Dashboard',
+        onClick: () => router.push('/dashboard'),
+      },
+    });
+  }, [generationProgress, router]);
 
   return (
     <div className="space-y-8 pb-24 md:pb-8">
@@ -76,7 +91,12 @@ export function PosterBuilderForm(): JSX.Element {
       <FirstPosterCelebration />
 
       {/* Generation Loading Screen */}
-      {isGenerating && <GenerationLoadingScreen progress={generationProgress} />}
+      {isGenerating && (
+        <GenerationLoadingScreen
+          progress={generationProgress}
+          onTimeout={handleGenerationTimeout}
+        />
+      )}
 
       {/* Guided Tour for First-Time Users */}
       {!isLoading && (

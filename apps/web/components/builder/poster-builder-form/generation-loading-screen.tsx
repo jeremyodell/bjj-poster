@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Award } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const TIPS = [
   "Pro tip: Remove backgrounds for cleaner posters (Pro feature)",
@@ -11,19 +12,32 @@ const TIPS = [
   "Pro includes background removal for cleaner photos",
 ];
 
+const DEFAULT_TIMEOUT_SECONDS = 60;
+
 interface GenerationLoadingScreenProps {
   progress: number;
+  onTimeout?: () => void;
+  timeoutSeconds?: number;
 }
 
-export function GenerationLoadingScreen({ progress }: GenerationLoadingScreenProps): JSX.Element {
+export function GenerationLoadingScreen({
+  progress,
+  onTimeout,
+  timeoutSeconds = DEFAULT_TIMEOUT_SECONDS,
+}: GenerationLoadingScreenProps): JSX.Element {
   const [tipIndex, setTipIndex] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const timeoutCalledRef = useRef(false);
+
+  // Derive hasTimedOut from elapsedSeconds to avoid state duplication
+  const hasTimedOut = elapsedSeconds >= timeoutSeconds;
 
   // Reset state on mount to ensure fresh state for each generation session.
   // This handles the case where the component might be reused without full unmount.
   useEffect(() => {
     setTipIndex(0);
     setElapsedSeconds(0);
+    timeoutCalledRef.current = false;
   }, []);
 
   // Rotate tips every 5 seconds
@@ -35,19 +49,34 @@ export function GenerationLoadingScreen({ progress }: GenerationLoadingScreenPro
     return () => clearInterval(interval);
   }, []);
 
-  // Track elapsed time
+  // Track elapsed time and handle timeout
   useEffect(() => {
     const interval = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
+      setElapsedSeconds((prev) => {
+        const newValue = prev + 1;
+
+        // Check for timeout - use ref to ensure callback only fires once
+        if (newValue >= timeoutSeconds && !timeoutCalledRef.current) {
+          timeoutCalledRef.current = true;
+          onTimeout?.();
+        }
+
+        return newValue;
+      });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [onTimeout, timeoutSeconds]);
 
-  const timeMessage =
-    elapsedSeconds >= 20
-      ? "Almost done! A few more seconds..."
-      : "Usually takes 15-20 seconds";
+  const getTimeMessage = (): string => {
+    if (hasTimedOut) {
+      return "Taking longer than usual. We'll email you when ready!";
+    }
+    if (elapsedSeconds >= 20) {
+      return "Almost done! A few more seconds...";
+    }
+    return "Usually takes 15-20 seconds";
+  };
 
   return (
     <div
@@ -110,11 +139,14 @@ export function GenerationLoadingScreen({ progress }: GenerationLoadingScreenPro
 
         {/* Time Estimate */}
         <p
-          className="mt-4 text-sm text-surface-400"
+          className={cn(
+            "mt-4 text-sm",
+            hasTimedOut ? "text-amber-400" : "text-surface-400"
+          )}
           aria-live="polite"
           aria-atomic="true"
         >
-          {timeMessage}
+          {getTimeMessage()}
         </p>
       </div>
     </div>

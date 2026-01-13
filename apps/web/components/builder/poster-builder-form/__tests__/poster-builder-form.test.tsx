@@ -2,6 +2,26 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PosterBuilderForm } from '../poster-builder-form';
 
+// Mock next/navigation
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
+}));
+
+// Mock error utilities
+vi.mock('@/lib/errors', () => ({
+  showErrorToast: vi.fn(),
+  trackError: vi.fn(),
+  ERROR_MESSAGES: {
+    GENERATION_TIMEOUT: {
+      title: 'Taking longer than usual',
+      description: "We'll email you when your poster is ready!",
+      emoji: '⏱️',
+    },
+  },
+}));
+
 // Mock all child components
 vi.mock('@/components/builder', () => ({
   PhotoUploadZone: () => <div data-testid="photo-upload-zone">Photo Upload</div>,

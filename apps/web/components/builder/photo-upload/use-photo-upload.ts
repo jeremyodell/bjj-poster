@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { trackError, ERROR_MESSAGES } from '@/lib/errors';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/heic', 'image/heif'];
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
@@ -34,7 +35,9 @@ export function usePhotoUpload(): UsePhotoUploadReturn {
     try {
       // Validate file type
       if (!ALLOWED_TYPES.includes(newFile.type)) {
-        setError('File must be JPG, PNG, or HEIC');
+        trackError('photo_invalid_format', { fileType: newFile.type });
+        const msg = ERROR_MESSAGES.PHOTO_INVALID_FORMAT;
+        setError(`${msg.emoji} ${msg.title}. ${msg.description}`);
         setFile(null);
         setPreview(null);
         return;
@@ -42,7 +45,9 @@ export function usePhotoUpload(): UsePhotoUploadReturn {
 
       // Validate file size
       if (newFile.size > MAX_SIZE_BYTES) {
-        setError('File must be under 10MB');
+        trackError('photo_too_large', { fileSize: newFile.size, maxSize: MAX_SIZE_BYTES });
+        const msg = ERROR_MESSAGES.PHOTO_TOO_LARGE;
+        setError(`${msg.emoji} ${msg.title}. ${msg.description}`);
         setFile(null);
         setPreview(null);
         return;
