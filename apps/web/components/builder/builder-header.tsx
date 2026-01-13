@@ -35,6 +35,7 @@ export function BuilderHeader(): JSX.Element {
         <div className="flex items-center gap-4">
           <Link
             href="/"
+            aria-label="Go back to home"
             className="group flex items-center gap-2 text-surface-400 transition-colors hover:text-white"
           >
             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />

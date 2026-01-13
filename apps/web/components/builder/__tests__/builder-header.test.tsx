@@ -46,6 +46,14 @@ describe('BuilderHeader', () => {
     Object.defineProperty(window, 'scrollY', { value: 0, writable: true });
   });
 
+  it('has accessible aria-label on back link', () => {
+    render(<BuilderHeader />);
+
+    const backLink = screen.getByRole('link', { name: /go back to home/i });
+    expect(backLink).toBeInTheDocument();
+    expect(backLink).toHaveAttribute('href', '/');
+  });
+
   it('renders logo linking to dashboard', () => {
     render(<BuilderHeader />);
 
