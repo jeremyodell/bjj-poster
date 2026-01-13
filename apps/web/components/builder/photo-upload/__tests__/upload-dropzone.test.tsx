@@ -65,6 +65,14 @@ describe('UploadDropzone', () => {
 
       expect(screen.queryByText(/tap to upload/i)).not.toBeInTheDocument();
     });
+
+    it('announces loading state to screen readers', () => {
+      render(<UploadDropzone {...defaultProps} isLoading={true} />);
+
+      const liveRegion = screen.getByRole('status');
+      expect(liveRegion).toBeInTheDocument();
+      expect(liveRegion).toHaveTextContent(/processing image/i);
+    });
   });
 
   describe('file selection', () => {

@@ -85,13 +85,14 @@ export function UploadDropzone({
         )}
       >
         {isLoading ? (
-          <div className="flex flex-col items-center">
+          <div role="status" aria-live="polite" className="flex flex-col items-center">
             <div className="relative">
               <div className="absolute inset-0 animate-ping rounded-full bg-gold-500/20" />
               <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-surface-700 bg-surface-800">
                 <Loader2
                   data-testid="loading-spinner"
                   className="h-8 w-8 animate-spin text-gold-500"
+                  aria-hidden="true"
                 />
               </div>
             </div>
