@@ -30,7 +30,7 @@ export default function Home() {
           <nav className="flex items-center justify-between py-6">
             <Link href="/" className="group flex items-center gap-2">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-500">
-                <Trophy className="h-5 w-5 text-surface-950" />
+                <Trophy className="h-5 w-5 text-surface-950" aria-hidden="true" />
               </div>
               <span className="font-display text-2xl tracking-wider text-white">
                 BJJ POSTER
@@ -56,7 +56,7 @@ export default function Home() {
             <div className="space-y-8">
               {/* Badge */}
               <div className="inline-flex items-center gap-2 rounded-full border border-gold-500/30 bg-gold-500/10 px-4 py-2 opacity-0 animate-fade-in-up">
-                <Sparkles className="h-4 w-4 text-gold-500" />
+                <Sparkles className="h-4 w-4 text-gold-500" aria-hidden="true" />
                 <span className="text-sm font-medium text-gold-400">Professional Quality Designs</span>
               </div>
 
@@ -84,7 +84,7 @@ export default function Home() {
                 <Button asChild size="lg" className="group">
                   <Link href="/auth/signup">
                     Start Creating Free
-                    <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                   </Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
@@ -315,7 +315,7 @@ export default function Home() {
                 ].map((feature, index) => (
                   <div key={index} className="group flex gap-4">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-surface-700 bg-surface-800 transition-all duration-300 group-hover:border-gold-500/50">
-                      <feature.icon className="h-5 w-5 text-gold-500" />
+                      <feature.icon className="h-5 w-5 text-gold-500" aria-hidden="true" />
                     </div>
                     <div>
                       <h3 className="mb-1 font-semibold text-white">{feature.title}</h3>
@@ -336,7 +336,7 @@ export default function Home() {
                 {/* Placeholder for feature image */}
                 <div className="relative h-full w-full overflow-hidden rounded-xl bg-surface-800">
                   <div className="flex h-full items-center justify-center">
-                    <Trophy className="h-32 w-32 text-surface-700" />
+                    <Trophy className="h-32 w-32 text-surface-700" aria-hidden="true" />
                   </div>
                 </div>
               </div>
@@ -373,7 +373,7 @@ export default function Home() {
                 <Button asChild size="xl" className="group">
                   <Link href="/auth/signup">
                     Get Started Free
-                    <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                    <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                   </Link>
                 </Button>
                 <span className="text-sm text-surface-500">No credit card required</span>
@@ -389,7 +389,7 @@ export default function Home() {
           <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
             <Link href="/" className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-500">
-                <Trophy className="h-4 w-4 text-surface-950" />
+                <Trophy className="h-4 w-4 text-surface-950" aria-hidden="true" />
               </div>
               <span className="font-display text-xl tracking-wider text-white">BJJ POSTER</span>
             </Link>
