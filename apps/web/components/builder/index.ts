@@ -24,3 +24,4 @@ export {
   PreviewModal,
   PosterPreviewCanvas,
 } from './poster-builder-form';
+export { PremiumFeatureStrip } from './premium-feature-strip';
