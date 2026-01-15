@@ -6,6 +6,8 @@ export interface Template {
   name: string;
   category: string;
   thumbnailUrl: string;
+  /** Subscription tier required to use this template. Defaults to 'free' if not specified. */
+  tier?: 'free' | 'pro' | 'premium';
 }
 
 /**
