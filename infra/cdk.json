@@ -1,7 +1,6 @@
 {
   "app": "node bin/bjj-poster-app.js",
   "context": {
-    "@aws-cdk/core:enableStackNameDuplicates": false,
     "@aws-cdk/core:stackRelativeExports": true
   }
 }
