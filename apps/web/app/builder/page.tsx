@@ -1,13 +1,43 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Sparkles, Trophy } from 'lucide-react';
 import { PosterBuilderForm } from '@/components/builder';
 import { PageTransition, motion } from '@/components/ui/motion';
+import { QuotaLimitModal, useQuotaGate } from '@/components/quota';
+import { useUserStore } from '@/lib/stores';
 import { easings } from '@/lib/animations';
+import type { Poster } from '@/lib/types/api';
 
 export default function BuilderPage(): JSX.Element {
+  const { showModal, handleUpgrade, handleMaybeLater } = useQuotaGate();
+  const postersThisMonth = useUserStore((state) => state.postersThisMonth);
+
+  // Generate mock posters based on usage count for the modal display
+  // TODO: Replace with actual poster fetch from API when available
+  const mockPosters: Poster[] = useMemo(() => {
+    return Array.from({ length: postersThisMonth }, (_, i) => ({
+      id: `mock-${i}`,
+      templateId: 'template-1',
+      createdAt: new Date().toISOString(),
+      thumbnailUrl: '/images/examples/poster-1.svg',
+      athleteName: 'Champion',
+      tournament: 'Tournament',
+      beltRank: 'blue',
+      status: 'completed' as const,
+    }));
+  }, [postersThisMonth]);
+
   return (
     <PageTransition>
+      {/* Quota Limit Modal - blocks entire page when quota exceeded */}
+      <QuotaLimitModal
+        open={showModal}
+        posters={mockPosters}
+        onUpgrade={handleUpgrade}
+        onMaybeLater={handleMaybeLater}
+      />
+
       <div className="relative min-h-screen overflow-hidden">
         {/* Background atmospheric effects - creative workspace feel */}
         <div className="pointer-events-none fixed inset-0">

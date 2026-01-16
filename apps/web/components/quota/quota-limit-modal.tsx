@@ -24,7 +24,7 @@ export interface QuotaLimitModalProps {
   onMaybeLater: () => void
 }
 
-const FREE_TIER_LIMIT = 3
+const FREE_TIER_LIMIT = 2
 
 export function QuotaLimitModal({
   open,

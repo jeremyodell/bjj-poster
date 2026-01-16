@@ -52,7 +52,7 @@ export type UserStore = UserState & UserActions;
 export const UNLIMITED = -1;
 
 const TIER_LIMITS: Record<SubscriptionTier, number> = {
-  free: 3,
+  free: 2,
   pro: 20,
   premium: UNLIMITED,
 };

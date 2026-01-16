@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, Camera, Download, Palette, Sparkles, Trophy, Users, Star } from 'lucide-react';
+import { ArrowRight, Camera, Crown, Download, Palette, Rocket, Sparkles, Trophy, Users, Star, Zap, Check } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -62,6 +62,12 @@ export default function Home() {
               </Link>
 
               <div className="flex items-center gap-6">
+                <Link
+                  href="/pricing"
+                  className="hidden text-sm font-medium text-surface-300 transition-colors hover:text-gold-400 sm:block"
+                >
+                  Pricing
+                </Link>
                 <Link
                   href="/auth/login"
                   className="hidden text-sm text-surface-400 transition-colors hover:text-gold-400 sm:block"
@@ -559,6 +565,168 @@ export default function Home() {
                 </motion.div>
               </SlideRight>
             </div>
+          </div>
+        </section>
+
+        {/* Pricing Preview Section */}
+        <section aria-labelledby="pricing-heading" className="relative section-padding bg-surface-900/30">
+          {/* Subtle diagonal stripes */}
+          <div
+            className="absolute inset-0 opacity-[0.015]"
+            style={{
+              backgroundImage: `repeating-linear-gradient(
+                -45deg,
+                rgba(212, 175, 55, 1) 0px,
+                rgba(212, 175, 55, 1) 1px,
+                transparent 1px,
+                transparent 40px
+              )`
+            }}
+          />
+
+          <div className="container-wide relative z-10">
+            {/* Section Header */}
+            <FadeUp className="mb-16 text-center">
+              <span className="mb-4 inline-flex items-center gap-3 text-sm font-medium uppercase tracking-[0.3em] text-gold-500">
+                <span className="h-px w-8 bg-gold-500" />
+                Choose Your Path
+                <span className="h-px w-8 bg-gold-500" />
+              </span>
+              <h2
+                id="pricing-heading"
+                className="font-display text-4xl tracking-wide text-white sm:text-5xl lg:text-6xl text-shadow-dramatic"
+              >
+                SIMPLE, <span className="text-gradient-gold">CHAMPION</span> PRICING
+              </h2>
+              <p className="mx-auto mt-4 max-w-xl text-surface-400">
+                Start free. Upgrade when you're ready to go pro.
+              </p>
+            </FadeUp>
+
+            {/* Pricing Cards */}
+            <StaggerContainer staggerDelay={0.1} className="grid gap-6 md:grid-cols-3 lg:gap-8">
+              {/* Free Tier */}
+              <StaggerItem>
+                <motion.div
+                  whileHover={{ y: -8, transition: { duration: 0.3 } }}
+                  className="group relative"
+                >
+                  <div className="card-champion relative h-full p-6 lg:p-8 transition-all duration-500 hover:shadow-gold-lg">
+                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-800 group-hover:bg-gold-500/10 transition-colors">
+                      <Zap className="h-6 w-6 text-gold-500" />
+                    </div>
+                    <h3 className="font-display text-2xl text-white mb-1">FREE</h3>
+                    <p className="text-sm text-surface-400 mb-4">Perfect for trying out</p>
+                    <div className="mb-6">
+                      <span className="font-display text-4xl text-white">$0</span>
+                      <span className="text-surface-500">/month</span>
+                    </div>
+                    <ul className="space-y-3 mb-6">
+                      {['2 posters per month', '720p resolution', 'Basic templates'].map((feature) => (
+                        <li key={feature} className="flex items-center gap-2 text-sm text-surface-300">
+                          <Check className="h-4 w-4 text-gold-500 shrink-0" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button asChild variant="outline" className="w-full border-surface-700 hover:border-gold-500/50 hover:bg-gold-500/5">
+                      <Link href="/auth/signup?plan=free">Get Started Free</Link>
+                    </Button>
+                  </div>
+                </motion.div>
+              </StaggerItem>
+
+              {/* Pro Tier - Featured */}
+              <StaggerItem>
+                <motion.div
+                  whileHover={{ y: -8, transition: { duration: 0.3 } }}
+                  className="group relative"
+                >
+                  {/* Popular badge */}
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.3, ease: easings.elastic }}
+                    viewport={{ once: true }}
+                    className="absolute -top-3 left-1/2 -translate-x-1/2 z-10"
+                  >
+                    <span className="rounded-full bg-gold-500 px-4 py-1 text-xs font-bold text-surface-950 shadow-lg shadow-gold-500/30">
+                      MOST POPULAR
+                    </span>
+                  </motion.div>
+                  <div className="card-champion relative h-full p-6 lg:p-8 transition-all duration-500 ring-2 ring-gold-500/50 hover:shadow-gold-lg">
+                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gold-500/20">
+                      <Rocket className="h-6 w-6 text-gold-500" />
+                    </div>
+                    <h3 className="font-display text-2xl text-white mb-1">PRO</h3>
+                    <p className="text-sm text-surface-400 mb-4">For serious athletes</p>
+                    <div className="mb-6">
+                      <span className="font-display text-4xl text-gold-400">$9.99</span>
+                      <span className="text-surface-500">/month</span>
+                    </div>
+                    <ul className="space-y-3 mb-6">
+                      {['20 posters per month', '1080p HD resolution', 'No watermark', 'Background removal'].map((feature) => (
+                        <li key={feature} className="flex items-center gap-2 text-sm text-surface-300">
+                          <Check className="h-4 w-4 text-gold-500 shrink-0" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button asChild className="w-full btn-premium bg-gold-500 text-surface-950 hover:bg-gold-400">
+                      <Link href="/auth/signup?plan=pro">Start Pro Trial</Link>
+                    </Button>
+                  </div>
+                </motion.div>
+              </StaggerItem>
+
+              {/* Premium Tier */}
+              <StaggerItem>
+                <motion.div
+                  whileHover={{ y: -8, transition: { duration: 0.3 } }}
+                  className="group relative"
+                >
+                  <div className="card-champion relative h-full p-6 lg:p-8 transition-all duration-500 hover:shadow-gold-lg">
+                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-800 group-hover:bg-gold-500/10 transition-colors">
+                      <Crown className="h-6 w-6 text-gold-500" />
+                    </div>
+                    <h3 className="font-display text-2xl text-white mb-1">PREMIUM</h3>
+                    <p className="text-sm text-surface-400 mb-4">For professionals & teams</p>
+                    <div className="mb-6">
+                      <span className="font-display text-4xl text-white">$29.99</span>
+                      <span className="text-surface-500">/month</span>
+                    </div>
+                    <ul className="space-y-3 mb-6">
+                      {['Unlimited posters', '4K resolution', 'AI backgrounds', 'Priority support'].map((feature) => (
+                        <li key={feature} className="flex items-center gap-2 text-sm text-surface-300">
+                          <Check className="h-4 w-4 text-gold-500 shrink-0" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button asChild variant="outline" className="w-full border-surface-700 hover:border-gold-500/50 hover:bg-gold-500/5">
+                      <Link href="/auth/signup?plan=premium">Go Premium</Link>
+                    </Button>
+                  </div>
+                </motion.div>
+              </StaggerItem>
+            </StaggerContainer>
+
+            {/* View full pricing link */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              viewport={{ once: true }}
+              className="mt-10 text-center"
+            >
+              <Link
+                href="/pricing"
+                className="inline-flex items-center gap-2 text-sm text-surface-400 hover:text-gold-400 transition-colors"
+              >
+                Compare all features
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </motion.div>
           </div>
         </section>
 
