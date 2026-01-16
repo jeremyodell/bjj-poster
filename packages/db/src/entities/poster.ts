@@ -1,0 +1,68 @@
+/**
+ * Poster Entity Types
+ *
+ * Represents generated poster data in DynamoDB.
+ * Key pattern: PK=USER#<userId>, SK=POSTER#<timestamp>#<posterId>
+ */
+
+export type BeltRank = 'white' | 'blue' | 'purple' | 'brown' | 'black';
+export type PosterStatus = 'completed' | 'failed';
+
+export interface Poster {
+  posterId: string;
+  userId: string;
+  templateId: string;
+  status: PosterStatus;
+  athleteName: string;
+  teamName?: string;
+  beltRank: BeltRank;
+  tournamentName: string;
+  tournamentDate: string;
+  tournamentLocation?: string;
+  achievement?: string;
+  imageKey: string;
+  thumbnailKey: string;
+  uploadKey: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * DynamoDB item structure for Poster
+ */
+export interface PosterItem {
+  PK: string; // USER#<userId>
+  SK: string; // POSTER#<timestamp>#<posterId>
+  entityType: 'POSTER';
+  posterId: string;
+  userId: string;
+  templateId: string;
+  status: PosterStatus;
+  athleteName: string;
+  teamName?: string;
+  beltRank: BeltRank;
+  tournamentName: string;
+  tournamentDate: string;
+  tournamentLocation?: string;
+  achievement?: string;
+  imageKey: string;
+  thumbnailKey: string;
+  uploadKey: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePosterInput {
+  userId: string;
+  templateId: string;
+  athleteName: string;
+  teamName?: string;
+  beltRank: BeltRank;
+  tournamentName: string;
+  tournamentDate: string;
+  tournamentLocation?: string;
+  achievement?: string;
+  imageKey: string;
+  thumbnailKey: string;
+  uploadKey: string;
+}
