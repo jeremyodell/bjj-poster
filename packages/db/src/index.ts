@@ -41,7 +41,7 @@ export type {
 
 // Re-export repository classes (for testing/DI)
 export { TemplateRepository } from './repositories/template-repository.js';
-export { UserRepository } from './repositories/user-repository.js';
+export { UserRepository, type UsageCheckResult } from './repositories/user-repository.js';
 export { WebhookEventRepository } from './repositories/webhook-event-repository.js';
 export { RateLimitRepository } from './repositories/rate-limit-repository.js';
 export { PosterRepository } from './repositories/poster-repository.js';
