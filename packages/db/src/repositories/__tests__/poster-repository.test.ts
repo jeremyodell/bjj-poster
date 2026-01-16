@@ -70,4 +70,27 @@ describe('PosterRepository', () => {
       expect(posters[0].posterId).toBe('pstr_abc');
     });
   });
+
+  describe('countForCurrentMonth', () => {
+    it('returns count of posters for current month', async () => {
+      mockSend.mockResolvedValueOnce({
+        Count: 3,
+      });
+
+      const count = await repo.countForCurrentMonth('user-123');
+
+      expect(count).toBe(3);
+      expect(mockSend).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns 0 when no posters exist', async () => {
+      mockSend.mockResolvedValueOnce({
+        Count: 0,
+      });
+
+      const count = await repo.countForCurrentMonth('user-123');
+
+      expect(count).toBe(0);
+    });
+  });
 });

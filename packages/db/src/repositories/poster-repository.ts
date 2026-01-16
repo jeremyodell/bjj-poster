@@ -84,9 +84,11 @@ export class PosterRepository {
       new QueryCommand({
         TableName: TABLE_NAME,
         KeyConditionExpression: 'PK = :pk AND SK >= :sk',
+        FilterExpression: 'entityType = :entityType',
         ExpressionAttributeValues: {
           ':pk': `USER#${userId}`,
           ':sk': `POSTER#${startOfMonth.toISOString()}`,
+          ':entityType': 'POSTER',
         },
         Select: 'COUNT',
       })
