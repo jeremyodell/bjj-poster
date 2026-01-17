@@ -19,15 +19,16 @@ describe('PosterRepository', () => {
       mockSend.mockResolvedValueOnce({});
 
       const input: CreatePosterInput = {
+        posterId: 'pstr_test123abc',
         userId: 'user-123',
         templateId: 'classic',
         athleteName: 'João Silva',
         beltRank: 'blue',
         tournamentName: 'World Championship',
         tournamentDate: 'June 2025',
-        imageKey: 'posters/user-123/pstr_abc/original.jpg',
-        thumbnailKey: 'posters/user-123/pstr_abc/thumbnail.jpg',
-        uploadKey: 'uploads/user-123/pstr_abc/photo.jpg',
+        imageKey: 'posters/user-123/pstr_test123abc/original.jpg',
+        thumbnailKey: 'posters/user-123/pstr_test123abc/thumbnail.jpg',
+        uploadKey: 'uploads/user-123/pstr_test123abc/photo.jpg',
       };
 
       const poster = await repo.create(input);
@@ -35,7 +36,7 @@ describe('PosterRepository', () => {
       expect(poster.userId).toBe('user-123');
       expect(poster.athleteName).toBe('João Silva');
       expect(poster.status).toBe('completed');
-      expect(poster.posterId).toMatch(/^pstr_/);
+      expect(poster.posterId).toBe('pstr_test123abc');
       expect(mockSend).toHaveBeenCalledTimes(1);
     });
   });

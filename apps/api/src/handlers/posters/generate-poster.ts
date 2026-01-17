@@ -10,17 +10,23 @@
  * 4. Generate poster and thumbnail
  * 5. Upload to S3
  * 6. Save to DynamoDB with S3 keys
- * 7. On failure, rollback quota increment
+ * 7. On failure, rollback quota and cleanup S3
  */
 
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import sharp from 'sharp';
 import { nanoid } from 'nanoid';
-import { composePoster, initBundledFonts } from '@bjj-poster/core';
+import {
+  composePoster,
+  initBundledFonts,
+  TemplateNotFoundError,
+  FontLoadError,
+  ExternalServiceError,
+} from '@bjj-poster/core';
 import { db } from '@bjj-poster/db';
 import type { BeltRank } from '@bjj-poster/db';
 import { parseMultipart, parseMultipartBase64 } from '../../lib/multipart.js';
-import { uploadMultipleToS3, generatePosterKeys } from '../../lib/s3.js';
+import { uploadMultipleToS3, generatePosterKeys, deleteFromS3 } from '../../lib/s3.js';
 import { generatePosterSchema } from './types.js';
 import type { GeneratePosterResponse, QuotaExceededResponse } from './types.js';
 
@@ -34,6 +40,19 @@ let fontsInitialized = false;
 
 // Get allowed origins from environment or use restrictive default
 const ALLOWED_ORIGIN = process.env.CORS_ALLOWED_ORIGIN || 'https://bjj-poster.com';
+
+/**
+ * Sanitize text input to prevent XSS in rendered output.
+ * Escapes HTML special characters.
+ */
+function sanitizeText(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
 
 function createResponse(
   statusCode: number,
@@ -133,7 +152,13 @@ export const handler = async (
   // 4. Validate actual image format with sharp (security - don't trust MIME header)
   const imageValidation = await validateImageFormat(parsed.file.buffer);
   if (!imageValidation.valid) {
-    console.warn('Invalid image rejected', { requestId, error: imageValidation.error });
+    console.warn('Invalid image rejected', {
+      requestId,
+      userId,
+      error: imageValidation.error,
+      claimedMimeType: parsed.file.mimeType,
+      fileSize: parsed.file.buffer.length,
+    });
     return createErrorResponse(400, 'Photo must be a valid JPEG or PNG image', 'INVALID_PHOTO');
   }
 
@@ -168,51 +193,51 @@ export const handler = async (
 
   // From this point, we've consumed quota - must rollback on failure
   let quotaConsumed = true;
+  let s3Keys: { imageKey: string; thumbnailKey: string; uploadKey: string } | null = null;
 
   try {
     // 7. Initialize fonts once (cold start)
     if (!fontsInitialized) {
       console.log('Initializing bundled fonts', { requestId });
-      try {
-        await initBundledFonts();
-        fontsInitialized = true;
-      } catch (fontError) {
-        console.error('Font initialization failed', { requestId, error: fontError });
-        throw new Error('Failed to initialize fonts');
-      }
+      await initBundledFonts();
+      fontsInitialized = true;
     }
 
-    // 8. Generate poster using composePoster
+    // 8. Sanitize text inputs to prevent XSS in rendered output
+    const sanitizedData = {
+      athleteName: sanitizeText(input.athleteName),
+      teamName: input.teamName ? sanitizeText(input.teamName) : '',
+      achievement: input.achievement ? sanitizeText(input.achievement) : '',
+      tournamentName: sanitizeText(input.tournamentName),
+      date: sanitizeText(input.tournamentDate),
+      location: input.tournamentLocation ? sanitizeText(input.tournamentLocation) : '',
+    };
+
+    // 9. Generate poster using composePoster
     console.log('Composing poster', { requestId, templateId: input.templateId });
     const posterResult = await composePoster({
       templateId: input.templateId,
       athletePhoto: parsed.file.buffer,
-      data: {
-        athleteName: input.athleteName,
-        teamName: input.teamName || '',
-        achievement: input.achievement || '',
-        tournamentName: input.tournamentName,
-        date: input.tournamentDate,
-        location: input.tournamentLocation || '',
-      },
+      data: sanitizedData,
       output: {
         format: 'jpeg',
         quality: POSTER_QUALITY,
       },
     });
 
-    // 9. Generate thumbnail
+    // 10. Generate thumbnail
     console.log('Generating thumbnail', { requestId });
     const thumbnail = await sharp(posterResult.buffer)
       .resize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, { fit: 'cover' })
       .jpeg({ quality: THUMBNAIL_QUALITY })
       .toBuffer();
 
-    // 10. Generate poster ID and S3 keys BEFORE any writes
+    // 11. Generate poster ID and S3 keys BEFORE any writes
     const posterId = `pstr_${nanoid(12)}`;
     const keys = generatePosterKeys(userId, posterId);
+    s3Keys = keys; // Track for cleanup on failure
 
-    // 11. Upload to S3 first (if this fails, we haven't touched the DB yet)
+    // 12. Upload to S3 first (if this fails, we haven't touched the DB yet)
     console.log('Uploading to S3', { requestId, posterId });
     const [posterUpload, thumbnailUpload] = await uploadMultipleToS3([
       { key: keys.imageKey, buffer: posterResult.buffer, contentType: 'image/jpeg' },
@@ -220,9 +245,10 @@ export const handler = async (
       { key: keys.uploadKey, buffer: parsed.file.buffer, contentType: `image/${imageValidation.format}` },
     ]);
 
-    // 12. Save to DynamoDB with correct S3 keys
+    // 13. Save to DynamoDB with correct S3 keys
     console.log('Saving to DynamoDB', { requestId, posterId });
     const poster = await db.posters.create({
+      posterId,
       userId,
       templateId: input.templateId,
       athleteName: input.athleteName,
@@ -237,10 +263,11 @@ export const handler = async (
       uploadKey: keys.uploadKey,
     });
 
-    // Success - quota was correctly consumed
-    quotaConsumed = false; // No rollback needed
+    // Success - quota was correctly consumed, S3 objects are valid
+    quotaConsumed = false;
+    s3Keys = null; // No cleanup needed
 
-    // 13. Return success response
+    // 14. Return success response
     const response: GeneratePosterResponse = {
       poster: {
         id: poster.posterId,
@@ -275,19 +302,39 @@ export const handler = async (
         await db.users.decrementUsage(userId);
         console.log('Quota rolled back after failure', { requestId, userId });
       } catch (rollbackError) {
-        // Log but don't fail - user can contact support
         console.error('Failed to rollback quota', { requestId, userId, error: rollbackError });
       }
     }
 
-    // Return appropriate error based on failure type
+    // Cleanup orphaned S3 objects if DB write failed after S3 upload
+    if (s3Keys) {
+      console.warn('Cleaning up orphaned S3 objects after DB failure', { requestId, keys: s3Keys });
+      try {
+        await Promise.all([
+          deleteFromS3(s3Keys.imageKey),
+          deleteFromS3(s3Keys.thumbnailKey),
+          deleteFromS3(s3Keys.uploadKey),
+        ]);
+        console.log('S3 cleanup completed', { requestId });
+      } catch (cleanupError) {
+        // Log but continue - S3 lifecycle rules can handle orphaned objects
+        console.error('Failed to cleanup S3 objects', { requestId, error: cleanupError });
+      }
+    }
+
+    // Return appropriate error based on failure type using typed errors
+    if (error instanceof TemplateNotFoundError) {
+      return createErrorResponse(404, 'Template not found', 'TEMPLATE_NOT_FOUND');
+    }
+    if (error instanceof FontLoadError) {
+      return createErrorResponse(500, 'Failed to initialize fonts', 'FONT_INIT_FAILED');
+    }
+    if (error instanceof ExternalServiceError) {
+      return createErrorResponse(500, 'Failed to upload poster', 'STORAGE_ERROR');
+    }
+
+    // Fallback for untyped errors (legacy compatibility)
     if (error instanceof Error) {
-      if (error.message.includes('template')) {
-        return createErrorResponse(404, 'Template not found', 'TEMPLATE_NOT_FOUND');
-      }
-      if (error.message.includes('font')) {
-        return createErrorResponse(500, 'Failed to initialize fonts', 'FONT_INIT_FAILED');
-      }
       if (error.message.includes('S3') || error.message.includes('upload')) {
         return createErrorResponse(500, 'Failed to upload poster', 'STORAGE_ERROR');
       }

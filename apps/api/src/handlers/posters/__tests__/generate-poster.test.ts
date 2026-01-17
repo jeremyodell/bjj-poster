@@ -2,12 +2,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 
 // Mock all dependencies before importing handler
-vi.mock('@bjj-poster/core', () => ({
-  composePoster: vi.fn().mockResolvedValue({
-    buffer: Buffer.from('fake-poster-data'),
-  }),
-  initBundledFonts: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock('@bjj-poster/core', () => {
+  // Define error classes inside the factory to avoid hoisting issues
+  class TemplateNotFoundError extends Error {
+    name = 'TemplateNotFoundError';
+  }
+  class FontLoadError extends Error {
+    name = 'FontLoadError';
+  }
+  class ExternalServiceError extends Error {
+    name = 'ExternalServiceError';
+  }
+
+  return {
+    composePoster: vi.fn().mockResolvedValue({
+      buffer: Buffer.from('fake-poster-data'),
+    }),
+    initBundledFonts: vi.fn().mockResolvedValue(undefined),
+    TemplateNotFoundError,
+    FontLoadError,
+    ExternalServiceError,
+  };
+});
 
 vi.mock('@bjj-poster/db', () => ({
   db: {
@@ -79,6 +95,7 @@ vi.mock('../../../lib/s3.js', () => ({
     thumbnailKey: 'posters/user-123/pstr_test123/thumbnail.jpg',
     uploadKey: 'uploads/user-123/pstr_test123/photo.jpg',
   }),
+  deleteFromS3: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('sharp', () => ({
@@ -93,7 +110,7 @@ vi.mock('sharp', () => ({
 import { handler } from '../generate-poster.js';
 import { db } from '@bjj-poster/db';
 import { parseMultipart } from '../../../lib/multipart.js';
-import { uploadMultipleToS3 } from '../../../lib/s3.js';
+import { uploadMultipleToS3, deleteFromS3 } from '../../../lib/s3.js';
 import sharp from 'sharp';
 
 const mockCheckAndIncrementUsage = vi.mocked(db.users.checkAndIncrementUsage);
@@ -101,6 +118,7 @@ const mockDecrementUsage = vi.mocked(db.users.decrementUsage);
 const mockPostersCreate = vi.mocked(db.posters.create);
 const mockParseMultipart = vi.mocked(parseMultipart);
 const mockUploadMultipleToS3 = vi.mocked(uploadMultipleToS3);
+const mockDeleteFromS3 = vi.mocked(deleteFromS3);
 const mockSharp = vi.mocked(sharp);
 
 function createEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayProxyEvent {
@@ -339,7 +357,7 @@ describe('generatePoster handler', () => {
     expect(mockDecrementUsage).toHaveBeenCalledWith('user-123');
   });
 
-  it('returns 500 and rolls back quota on DynamoDB save failure', async () => {
+  it('returns 500 and rolls back quota and cleans up S3 on DynamoDB save failure', async () => {
     mockPostersCreate.mockRejectedValueOnce(new Error('DynamoDB error'));
 
     const event = createEvent();
@@ -349,6 +367,8 @@ describe('generatePoster handler', () => {
     const body = JSON.parse(result.body);
     expect(body.code).toBe('DATABASE_ERROR');
     expect(mockDecrementUsage).toHaveBeenCalledWith('user-123');
+    // Verify S3 cleanup was attempted
+    expect(mockDeleteFromS3).toHaveBeenCalledTimes(3);
   });
 
   it('returns 500 on thumbnail generation failure', async () => {

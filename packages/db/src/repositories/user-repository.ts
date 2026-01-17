@@ -6,6 +6,7 @@
  */
 
 import { UpdateCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { TABLE_NAME } from '../config.js';
 import type {
@@ -160,72 +161,156 @@ export class UserRepository {
   }
 
   /**
-   * Check if user can create a poster and increment usage if allowed.
+   * Atomically check if user can create a poster and increment usage if allowed.
+   *
+   * Uses DynamoDB conditional expressions to prevent race conditions where
+   * concurrent requests could bypass quota limits.
    */
   async checkAndIncrementUsage(userId: string): Promise<UsageCheckResult> {
     const user = await this.getById(userId);
-
-    if (!user) {
-      const resetsAt = this.getNextResetDate();
-      await this.client.send(
-        new UpdateCommand({
-          TableName: TABLE_NAME,
-          Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
-          UpdateExpression: 'SET postersThisMonth = :count, usageResetAt = :reset, updatedAt = :now',
-          ExpressionAttributeValues: {
-            ':count': 1,
-            ':reset': resetsAt,
-            ':now': new Date().toISOString(),
-          },
-        })
-      );
-      const limit = TIER_LIMITS.free;
-      return { allowed: true, used: 1, limit, remaining: limit - 1, resetsAt };
-    }
-
-    const tier = user.subscriptionTier || 'free';
-    const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
     const now = new Date();
-    const resetsAt = user.usageResetAt || this.getNextResetDate();
-    const needsReset = !user.usageResetAt || new Date(user.usageResetAt) <= now;
-    const currentUsage = needsReset ? 0 : (user.postersThisMonth || 0);
+    const tier = user?.subscriptionTier || 'free';
+    const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
+    const newResetsAt = this.getNextResetDate();
 
+    // Check if usage needs reset (new month)
+    const needsReset = !user?.usageResetAt || new Date(user.usageResetAt) <= now;
+
+    // For unlimited tier, just increment without condition
     if (limit === -1) {
+      const result = await this.atomicIncrementUsage(userId, needsReset, newResetsAt);
+      return {
+        allowed: true,
+        used: result.newCount,
+        limit: -1,
+        remaining: -1,
+        resetsAt: result.resetsAt,
+      };
+    }
+
+    // For limited tiers, use conditional expression to enforce quota atomically
+    try {
+      const result = await this.atomicIncrementWithLimit(userId, limit, needsReset, newResetsAt);
+      return {
+        allowed: true,
+        used: result.newCount,
+        limit,
+        remaining: limit - result.newCount,
+        resetsAt: result.resetsAt,
+      };
+    } catch (error) {
+      // ConditionalCheckFailedException means quota exceeded
+      if (error instanceof ConditionalCheckFailedException) {
+        const currentUsage = await this.getUsage(userId);
+        return {
+          allowed: false,
+          used: currentUsage.used,
+          limit,
+          remaining: 0,
+          resetsAt: currentUsage.resetsAt,
+        };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Atomically increment usage counter for unlimited tier users
+   */
+  private async atomicIncrementUsage(
+    userId: string,
+    needsReset: boolean,
+    newResetsAt: string
+  ): Promise<{ newCount: number; resetsAt: string }> {
+    const now = new Date().toISOString();
+
+    if (needsReset) {
+      // Reset counter to 1 for new period
       await this.client.send(
         new UpdateCommand({
           TableName: TABLE_NAME,
           Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
-          UpdateExpression: 'SET postersThisMonth = :count, updatedAt = :now',
+          UpdateExpression: 'SET postersThisMonth = :one, usageResetAt = :reset, updatedAt = :now',
           ExpressionAttributeValues: {
-            ':count': currentUsage + 1,
-            ':now': now.toISOString(),
+            ':one': 1,
+            ':reset': newResetsAt,
+            ':now': now,
           },
         })
       );
-      return { allowed: true, used: currentUsage + 1, limit: -1, remaining: -1, resetsAt: needsReset ? this.getNextResetDate() : resetsAt };
+      return { newCount: 1, resetsAt: newResetsAt };
     }
 
-    if (currentUsage >= limit) {
-      return { allowed: false, used: currentUsage, limit, remaining: 0, resetsAt: needsReset ? this.getNextResetDate() : resetsAt };
-    }
-
-    const newUsage = currentUsage + 1;
-    const newResetsAt = needsReset ? this.getNextResetDate() : resetsAt;
-
-    await this.client.send(
+    // Atomic increment using ADD
+    const result = await this.client.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
-        UpdateExpression: 'SET postersThisMonth = :count, usageResetAt = :reset, updatedAt = :now',
+        UpdateExpression: 'SET postersThisMonth = if_not_exists(postersThisMonth, :zero) + :one, updatedAt = :now',
         ExpressionAttributeValues: {
-          ':count': newUsage,
-          ':reset': newResetsAt,
-          ':now': now.toISOString(),
+          ':one': 1,
+          ':zero': 0,
+          ':now': now,
         },
+        ReturnValues: 'UPDATED_NEW',
       })
     );
 
-    return { allowed: true, used: newUsage, limit, remaining: limit - newUsage, resetsAt: newResetsAt };
+    const newCount = (result.Attributes?.postersThisMonth as number) || 1;
+    const user = await this.getById(userId);
+    return { newCount, resetsAt: user?.usageResetAt || newResetsAt };
+  }
+
+  /**
+   * Atomically increment usage with limit check using conditional expression.
+   * Throws ConditionalCheckFailedException if limit would be exceeded.
+   */
+  private async atomicIncrementWithLimit(
+    userId: string,
+    limit: number,
+    needsReset: boolean,
+    newResetsAt: string
+  ): Promise<{ newCount: number; resetsAt: string }> {
+    const now = new Date().toISOString();
+
+    if (needsReset) {
+      // Reset counter to 1 for new period (always allowed since limit >= 1)
+      await this.client.send(
+        new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+          UpdateExpression: 'SET postersThisMonth = :one, usageResetAt = :reset, updatedAt = :now',
+          ExpressionAttributeValues: {
+            ':one': 1,
+            ':reset': newResetsAt,
+            ':now': now,
+          },
+        })
+      );
+      return { newCount: 1, resetsAt: newResetsAt };
+    }
+
+    // Atomic increment with condition: only if current count < limit
+    // Using SET with if_not_exists ensures atomicity even for new users
+    const result = await this.client.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+        UpdateExpression: 'SET postersThisMonth = if_not_exists(postersThisMonth, :zero) + :one, updatedAt = :now',
+        ConditionExpression: 'attribute_not_exists(postersThisMonth) OR postersThisMonth < :limit',
+        ExpressionAttributeValues: {
+          ':one': 1,
+          ':zero': 0,
+          ':limit': limit,
+          ':now': now,
+        },
+        ReturnValues: 'UPDATED_NEW',
+      })
+    );
+
+    const newCount = (result.Attributes?.postersThisMonth as number) || 1;
+    const user = await this.getById(userId);
+    return { newCount, resetsAt: user?.usageResetAt || newResetsAt };
   }
 
   /**

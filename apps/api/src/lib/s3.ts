@@ -1,15 +1,19 @@
 /**
  * S3 Upload Helpers
  *
- * Provides utilities for uploading files to S3.
+ * Provides utilities for uploading and deleting files in S3.
  */
 
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 const isLocal = process.env.USE_LOCALSTACK === 'true';
 
 // Request timeout for S3 operations (30 seconds)
 const S3_REQUEST_TIMEOUT_MS = 30_000;
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 1000;
 
 export const s3Client = new S3Client(
   isLocal
@@ -30,8 +34,20 @@ export const s3Client = new S3Client(
       }
 );
 
-const BUCKET_NAME = process.env.POSTER_BUCKET_NAME || 'bjj-poster-app-posters';
+// Bucket name is required in non-local environments
+const BUCKET_NAME = process.env.POSTER_BUCKET_NAME || (isLocal ? 'bjj-poster-app-posters' : '');
+if (!BUCKET_NAME) {
+  throw new Error('POSTER_BUCKET_NAME environment variable is required');
+}
+
 const CDN_URL = process.env.CDN_URL || `https://${BUCKET_NAME}.s3.amazonaws.com`;
+
+/**
+ * Sleep for exponential backoff
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 export interface UploadResult {
   key: string;
@@ -39,26 +55,57 @@ export interface UploadResult {
 }
 
 /**
- * Upload a buffer to S3
+ * Upload a buffer to S3 with retry logic
  */
 export async function uploadToS3(
   key: string,
   buffer: Buffer,
   contentType: string
 ): Promise<UploadResult> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+          Body: buffer,
+          ContentType: contentType,
+        })
+      );
+
+      return {
+        key,
+        url: `${CDN_URL}/${key}`,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`S3 upload attempt ${attempt}/${MAX_RETRIES} failed`, {
+        key,
+        error: lastError.message,
+      });
+
+      if (attempt < MAX_RETRIES) {
+        // Exponential backoff: 1s, 2s, 4s
+        await sleep(INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1));
+      }
+    }
+  }
+
+  throw new Error(`S3 upload failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+}
+
+/**
+ * Delete an object from S3 (for cleanup on failures)
+ */
+export async function deleteFromS3(key: string): Promise<void> {
   await s3Client.send(
-    new PutObjectCommand({
+    new DeleteObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
-      Body: buffer,
-      ContentType: contentType,
     })
   );
-
-  return {
-    key,
-    url: `${CDN_URL}/${key}`,
-  };
 }
 
 /**

@@ -1,19 +1,37 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import { UserRepository } from '../user-repository.js';
 
 const mockSend = vi.fn();
 const mockClient = { send: mockSend } as any;
 
+// Fixed test date: 2026-01-17T12:00:00.000Z
+const TEST_NOW = new Date('2026-01-17T12:00:00.000Z').getTime();
+const FUTURE_RESET_DATE = '2026-02-01T00:00:00.000Z'; // First of next month
+const PAST_RESET_DATE = '2026-01-01T00:00:00.000Z'; // First of this month (in the past)
+
 describe('UserRepository', () => {
   let repo: UserRepository;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    // Reset mock to clear the queue of resolved values
+    mockSend.mockReset();
+    // Reset timers to real before setting up fake timers
+    vi.useRealTimers();
+    vi.useFakeTimers();
+    vi.setSystemTime(TEST_NOW);
     repo = new UserRepository(mockClient);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('checkAndIncrementUsage', () => {
     it('allows usage when under limit', async () => {
+      // 1. getById returns user with postersThisMonth: 1
+      // 2. atomicIncrementWithLimit UpdateCommand returns Attributes with new count
+      // 3. getById again to get resetsAt
       mockSend
         .mockResolvedValueOnce({
           Item: {
@@ -23,12 +41,20 @@ describe('UserRepository', () => {
             email: 'test@example.com',
             subscriptionTier: 'free',
             postersThisMonth: 1,
-            usageResetAt: new Date(Date.now() + 86400000).toISOString(),
+            usageResetAt: FUTURE_RESET_DATE,
             createdAt: '2026-01-01T00:00:00.000Z',
             updatedAt: '2026-01-01T00:00:00.000Z',
           },
         })
-        .mockResolvedValueOnce({});
+        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 2 } })
+        .mockResolvedValueOnce({
+          Item: {
+            PK: 'USER#user-123',
+            SK: 'PROFILE',
+            userId: 'user-123',
+            usageResetAt: FUTURE_RESET_DATE,
+          },
+        });
 
       const result = await repo.checkAndIncrementUsage('user-123');
 
@@ -39,29 +65,9 @@ describe('UserRepository', () => {
     });
 
     it('denies usage when at limit', async () => {
-      mockSend.mockResolvedValueOnce({
-        Item: {
-          PK: 'USER#user-123',
-          SK: 'PROFILE',
-          userId: 'user-123',
-          email: 'test@example.com',
-          subscriptionTier: 'free',
-          postersThisMonth: 2,
-          usageResetAt: new Date(Date.now() + 86400000).toISOString(),
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-        },
-      });
-
-      const result = await repo.checkAndIncrementUsage('user-123');
-
-      expect(result.allowed).toBe(false);
-      expect(result.used).toBe(2);
-      expect(result.remaining).toBe(0);
-    });
-
-    it('resets usage when past reset date', async () => {
-      const pastDate = new Date(Date.now() - 86400000).toISOString();
+      // 1. getById returns user with postersThisMonth: 2 (at limit)
+      // 2. atomicIncrementWithLimit throws ConditionalCheckFailedException
+      // 3. getUsage is called which calls getById
       mockSend
         .mockResolvedValueOnce({
           Item: {
@@ -71,7 +77,48 @@ describe('UserRepository', () => {
             email: 'test@example.com',
             subscriptionTier: 'free',
             postersThisMonth: 2,
-            usageResetAt: pastDate,
+            usageResetAt: FUTURE_RESET_DATE,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        })
+        .mockRejectedValueOnce(
+          new ConditionalCheckFailedException({ message: 'Limit exceeded', $metadata: {} })
+        )
+        .mockResolvedValueOnce({
+          Item: {
+            PK: 'USER#user-123',
+            SK: 'PROFILE',
+            userId: 'user-123',
+            email: 'test@example.com',
+            subscriptionTier: 'free',
+            postersThisMonth: 2,
+            usageResetAt: FUTURE_RESET_DATE,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        });
+
+      const result = await repo.checkAndIncrementUsage('user-123');
+
+      expect(result.allowed).toBe(false);
+      expect(result.used).toBe(2);
+      expect(result.remaining).toBe(0);
+    });
+
+    it('resets usage when past reset date', async () => {
+      // 1. getById returns user with past usageResetAt
+      // 2. atomicIncrementWithLimit resets and sets to 1
+      mockSend
+        .mockResolvedValueOnce({
+          Item: {
+            PK: 'USER#user-123',
+            SK: 'PROFILE',
+            userId: 'user-123',
+            email: 'test@example.com',
+            subscriptionTier: 'free',
+            postersThisMonth: 2,
+            usageResetAt: PAST_RESET_DATE,
             createdAt: '2026-01-01T00:00:00.000Z',
             updatedAt: '2026-01-01T00:00:00.000Z',
           },
@@ -85,6 +132,10 @@ describe('UserRepository', () => {
     });
 
     it('allows unlimited for premium tier', async () => {
+      // Premium uses atomicIncrementUsage (not WithLimit)
+      // 1. getById returns premium user
+      // 2. atomicIncrementUsage UpdateCommand with ReturnValues
+      // 3. getById to get resetsAt
       mockSend
         .mockResolvedValueOnce({
           Item: {
@@ -94,11 +145,18 @@ describe('UserRepository', () => {
             email: 'test@example.com',
             subscriptionTier: 'premium',
             postersThisMonth: 100,
+            usageResetAt: FUTURE_RESET_DATE,
             createdAt: '2026-01-01T00:00:00.000Z',
             updatedAt: '2026-01-01T00:00:00.000Z',
           },
         })
-        .mockResolvedValueOnce({});
+        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 101 } })
+        .mockResolvedValueOnce({
+          Item: {
+            userId: 'user-123',
+            usageResetAt: FUTURE_RESET_DATE,
+          },
+        });
 
       const result = await repo.checkAndIncrementUsage('user-123');
 
@@ -107,9 +165,13 @@ describe('UserRepository', () => {
     });
 
     it('creates new user record when user does not exist', async () => {
+      // 1. getById returns null
+      // 2. atomicIncrementWithLimit UpdateCommand succeeds
+      // 3. getById returns null (user still doesn't have full record)
       mockSend
         .mockResolvedValueOnce({ Item: null })
-        .mockResolvedValueOnce({});
+        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 1 } })
+        .mockResolvedValueOnce({ Item: null });
 
       const result = await repo.checkAndIncrementUsage('new-user');
 
@@ -129,12 +191,18 @@ describe('UserRepository', () => {
             email: 'test@example.com',
             subscriptionTier: 'pro',
             postersThisMonth: 19,
-            usageResetAt: new Date(Date.now() + 86400000).toISOString(),
+            usageResetAt: FUTURE_RESET_DATE,
             createdAt: '2026-01-01T00:00:00.000Z',
             updatedAt: '2026-01-01T00:00:00.000Z',
           },
         })
-        .mockResolvedValueOnce({});
+        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 20 } })
+        .mockResolvedValueOnce({
+          Item: {
+            userId: 'user-123',
+            usageResetAt: FUTURE_RESET_DATE,
+          },
+        });
 
       const result = await repo.checkAndIncrementUsage('user-123');
 
@@ -155,7 +223,7 @@ describe('UserRepository', () => {
           email: 'test@example.com',
           subscriptionTier: 'free',
           postersThisMonth: 1,
-          usageResetAt: new Date(Date.now() + 86400000).toISOString(),
+          usageResetAt: FUTURE_RESET_DATE,
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
@@ -183,7 +251,6 @@ describe('UserRepository', () => {
     });
 
     it('resets usage count when past reset date', async () => {
-      const pastDate = new Date(Date.now() - 86400000).toISOString();
       mockSend.mockResolvedValueOnce({
         Item: {
           PK: 'USER#user-123',
@@ -192,7 +259,7 @@ describe('UserRepository', () => {
           email: 'test@example.com',
           subscriptionTier: 'free',
           postersThisMonth: 2,
-          usageResetAt: pastDate,
+          usageResetAt: PAST_RESET_DATE,
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
