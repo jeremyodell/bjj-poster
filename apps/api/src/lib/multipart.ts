@@ -22,9 +22,12 @@ export interface ParsedMultipart {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-export function parseMultipart(
-  body: string,
-  contentType: string
+/**
+ * Internal parser that handles the busboy stream processing
+ */
+function createBusboyParser(
+  contentType: string,
+  bodyBuffer: Buffer
 ): Promise<ParsedMultipart> {
   return new Promise((resolve, reject) => {
     if (!contentType || !contentType.includes('multipart/form-data')) {
@@ -75,9 +78,19 @@ export function parseMultipart(
       reject(error);
     });
 
-    const bodyStream = Readable.from(Buffer.from(body, 'utf8'));
+    const bodyStream = Readable.from(bodyBuffer);
     bodyStream.pipe(busboy);
   });
+}
+
+/**
+ * Parse multipart form data from UTF-8 encoded body
+ */
+export function parseMultipart(
+  body: string,
+  contentType: string
+): Promise<ParsedMultipart> {
+  return createBusboyParser(contentType, Buffer.from(body, 'utf8'));
 }
 
 /**
@@ -87,58 +100,5 @@ export function parseMultipartBase64(
   body: string,
   contentType: string
 ): Promise<ParsedMultipart> {
-  return new Promise((resolve, reject) => {
-    if (!contentType || !contentType.includes('multipart/form-data')) {
-      reject(new Error('Invalid content type: expected multipart/form-data'));
-      return;
-    }
-
-    const fields: Record<string, string> = {};
-    let file: ParsedFile | null = null;
-
-    const busboy = Busboy({
-      headers: { 'content-type': contentType },
-      limits: { fileSize: MAX_FILE_SIZE },
-    });
-
-    busboy.on('field', (name, value) => {
-      fields[name] = value;
-    });
-
-    busboy.on('file', (fieldname, stream, info) => {
-      const { filename, encoding, mimeType } = info;
-      const chunks: Buffer[] = [];
-
-      stream.on('data', (chunk: Buffer) => {
-        chunks.push(chunk);
-      });
-
-      stream.on('end', () => {
-        file = {
-          fieldname,
-          filename,
-          encoding,
-          mimeType,
-          buffer: Buffer.concat(chunks),
-        };
-      });
-
-      stream.on('limit', () => {
-        reject(new Error(`File exceeds maximum size of ${MAX_FILE_SIZE} bytes`));
-      });
-    });
-
-    busboy.on('finish', () => {
-      resolve({ fields, file });
-    });
-
-    busboy.on('error', (error: Error) => {
-      reject(error);
-    });
-
-    // For base64-encoded bodies from API Gateway, decode directly to buffer
-    const decodedBuffer = Buffer.from(body, 'base64');
-    const bodyStream = Readable.from(decodedBuffer);
-    bodyStream.pipe(busboy);
-  });
+  return createBusboyParser(contentType, Buffer.from(body, 'base64'));
 }

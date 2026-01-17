@@ -26,6 +26,7 @@ vi.mock('@bjj-poster/db', () => ({
         remaining: 1,
         resetsAt: '2026-02-01T00:00:00.000Z',
       }),
+      decrementUsage: vi.fn().mockResolvedValue(undefined),
     },
     posters: {
       create: vi.fn().mockResolvedValue({
@@ -82,6 +83,7 @@ vi.mock('../../../lib/s3.js', () => ({
 
 vi.mock('sharp', () => ({
   default: vi.fn().mockReturnValue({
+    metadata: vi.fn().mockResolvedValue({ format: 'jpeg', width: 1920, height: 1080 }),
     resize: vi.fn().mockReturnThis(),
     jpeg: vi.fn().mockReturnThis(),
     toBuffer: vi.fn().mockResolvedValue(Buffer.from('fake-thumbnail')),
@@ -90,8 +92,16 @@ vi.mock('sharp', () => ({
 
 import { handler } from '../generate-poster.js';
 import { db } from '@bjj-poster/db';
+import { parseMultipart } from '../../../lib/multipart.js';
+import { uploadMultipleToS3 } from '../../../lib/s3.js';
+import sharp from 'sharp';
 
-const mockGetUsage = vi.mocked(db.users.getUsage);
+const mockCheckAndIncrementUsage = vi.mocked(db.users.checkAndIncrementUsage);
+const mockDecrementUsage = vi.mocked(db.users.decrementUsage);
+const mockPostersCreate = vi.mocked(db.posters.create);
+const mockParseMultipart = vi.mocked(parseMultipart);
+const mockUploadMultipleToS3 = vi.mocked(uploadMultipleToS3);
+const mockSharp = vi.mocked(sharp);
 
 function createEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayProxyEvent {
   return {
@@ -147,7 +157,7 @@ describe('generatePoster handler', () => {
   });
 
   it('returns 403 when quota exceeded', async () => {
-    mockGetUsage.mockResolvedValueOnce({
+    mockCheckAndIncrementUsage.mockResolvedValueOnce({
       allowed: false,
       used: 2,
       limit: 2,
@@ -196,6 +206,182 @@ describe('generatePoster handler', () => {
     const event = createEvent();
     const result = await handler(event);
 
-    expect(result.headers?.['Access-Control-Allow-Origin']).toBe('*');
+    expect(result.headers?.['Access-Control-Allow-Origin']).toBe('https://bjj-poster.com');
+  });
+
+  it('returns 400 when photo is missing', async () => {
+    mockParseMultipart.mockResolvedValueOnce({
+      fields: {
+        templateId: 'classic',
+        athleteName: 'João Silva',
+        beltRank: 'blue',
+        tournamentName: 'World Championship',
+        tournamentDate: 'June 2025',
+      },
+      file: null,
+    });
+
+    const event = createEvent();
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('MISSING_PHOTO');
+  });
+
+  it('returns 400 when image format is invalid', async () => {
+    mockSharp.mockReturnValueOnce({
+      metadata: vi.fn().mockResolvedValue({ format: 'gif' }),
+      resize: vi.fn().mockReturnThis(),
+      jpeg: vi.fn().mockReturnThis(),
+      toBuffer: vi.fn().mockResolvedValue(Buffer.from('fake-thumbnail')),
+    } as any);
+
+    const event = createEvent();
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('INVALID_PHOTO');
+  });
+
+  it('returns 400 when sharp cannot read image', async () => {
+    mockSharp.mockReturnValueOnce({
+      metadata: vi.fn().mockRejectedValue(new Error('Invalid image')),
+      resize: vi.fn().mockReturnThis(),
+      jpeg: vi.fn().mockReturnThis(),
+      toBuffer: vi.fn().mockResolvedValue(Buffer.from('fake-thumbnail')),
+    } as any);
+
+    const event = createEvent();
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('INVALID_PHOTO');
+  });
+
+  it('returns 413 when photo exceeds size limit', async () => {
+    mockParseMultipart.mockRejectedValueOnce(
+      new Error('File exceeds maximum size of 10485760 bytes')
+    );
+
+    const event = createEvent();
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(413);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('PHOTO_TOO_LARGE');
+  });
+
+  it('returns 400 when validation fails for required fields', async () => {
+    mockParseMultipart.mockResolvedValueOnce({
+      fields: {
+        templateId: 'classic',
+        // Missing athleteName
+        beltRank: 'blue',
+        tournamentName: 'World Championship',
+        tournamentDate: 'June 2025',
+      },
+      file: {
+        fieldname: 'photo',
+        filename: 'test.jpg',
+        encoding: '7bit',
+        mimeType: 'image/jpeg',
+        buffer: Buffer.from('fake-image-data'),
+      },
+    });
+
+    const event = createEvent();
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.details).toBeDefined();
+  });
+
+  it('returns 400 when beltRank is invalid', async () => {
+    mockParseMultipart.mockResolvedValueOnce({
+      fields: {
+        templateId: 'classic',
+        athleteName: 'João Silva',
+        beltRank: 'rainbow', // Invalid
+        tournamentName: 'World Championship',
+        tournamentDate: 'June 2025',
+      },
+      file: {
+        fieldname: 'photo',
+        filename: 'test.jpg',
+        encoding: '7bit',
+        mimeType: 'image/jpeg',
+        buffer: Buffer.from('fake-image-data'),
+      },
+    });
+
+    const event = createEvent();
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('returns 500 and rolls back quota on S3 upload failure', async () => {
+    mockUploadMultipleToS3.mockRejectedValueOnce(new Error('S3 upload failed'));
+
+    const event = createEvent();
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(500);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('STORAGE_ERROR');
+    expect(mockDecrementUsage).toHaveBeenCalledWith('user-123');
+  });
+
+  it('returns 500 and rolls back quota on DynamoDB save failure', async () => {
+    mockPostersCreate.mockRejectedValueOnce(new Error('DynamoDB error'));
+
+    const event = createEvent();
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(500);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('DATABASE_ERROR');
+    expect(mockDecrementUsage).toHaveBeenCalledWith('user-123');
+  });
+
+  it('returns 500 on thumbnail generation failure', async () => {
+    // First call for metadata validation succeeds
+    // Second call for thumbnail generation fails
+    mockSharp
+      .mockReturnValueOnce({
+        metadata: vi.fn().mockResolvedValue({ format: 'jpeg' }),
+        resize: vi.fn().mockReturnThis(),
+        jpeg: vi.fn().mockReturnThis(),
+        toBuffer: vi.fn().mockResolvedValue(Buffer.from('fake-thumbnail')),
+      } as any)
+      .mockReturnValueOnce({
+        resize: vi.fn().mockReturnThis(),
+        jpeg: vi.fn().mockReturnThis(),
+        toBuffer: vi.fn().mockRejectedValue(new Error('Thumbnail generation failed')),
+      } as any);
+
+    const event = createEvent();
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(500);
+    expect(mockDecrementUsage).toHaveBeenCalledWith('user-123');
+  });
+
+  it('handles multipart parsing error gracefully', async () => {
+    mockParseMultipart.mockRejectedValueOnce(new Error('Invalid multipart data'));
+
+    const event = createEvent();
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(400);
+    const body = JSON.parse(result.body);
+    expect(body.code).toBe('INVALID_MULTIPART');
   });
 });

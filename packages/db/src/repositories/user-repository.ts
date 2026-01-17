@@ -229,6 +229,25 @@ export class UserRepository {
   }
 
   /**
+   * Decrement usage count (for rollback on failed operations)
+   */
+  async decrementUsage(userId: string): Promise<void> {
+    await this.client.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
+        UpdateExpression: 'SET postersThisMonth = postersThisMonth - :one, updatedAt = :now',
+        ConditionExpression: 'postersThisMonth > :zero',
+        ExpressionAttributeValues: {
+          ':one': 1,
+          ':zero': 0,
+          ':now': new Date().toISOString(),
+        },
+      })
+    );
+  }
+
+  /**
    * Get usage stats without incrementing
    */
   async getUsage(userId: string): Promise<UsageCheckResult> {

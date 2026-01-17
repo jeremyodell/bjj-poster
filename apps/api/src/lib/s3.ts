@@ -8,6 +8,9 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const isLocal = process.env.USE_LOCALSTACK === 'true';
 
+// Request timeout for S3 operations (30 seconds)
+const S3_REQUEST_TIMEOUT_MS = 30_000;
+
 export const s3Client = new S3Client(
   isLocal
     ? {
@@ -15,8 +18,16 @@ export const s3Client = new S3Client(
         region: 'us-east-1',
         credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
         forcePathStyle: true,
+        requestHandler: {
+          requestTimeout: S3_REQUEST_TIMEOUT_MS,
+        },
       }
-    : { region: process.env.AWS_REGION || 'us-east-1' }
+    : {
+        region: process.env.AWS_REGION || 'us-east-1',
+        requestHandler: {
+          requestTimeout: S3_REQUEST_TIMEOUT_MS,
+        },
+      }
 );
 
 const BUCKET_NAME = process.env.POSTER_BUCKET_NAME || 'bjj-poster-app-posters';
