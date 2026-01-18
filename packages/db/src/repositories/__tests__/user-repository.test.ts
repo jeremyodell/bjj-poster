@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
+import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { UserRepository } from '../user-repository.js';
 
 const mockSend = vi.fn();
-const mockClient = { send: mockSend } as any;
+// Create a minimal mock that satisfies the DynamoDBDocumentClient interface
+// Only the 'send' method is used by the repository
+const mockClient = { send: mockSend } as unknown as DynamoDBDocumentClient;
 
 // Fixed test date: 2026-01-17T12:00:00.000Z
 const TEST_NOW = new Date('2026-01-17T12:00:00.000Z').getTime();
@@ -59,7 +62,7 @@ describe('UserRepository', () => {
     it('denies usage when at limit', async () => {
       // 1. getById returns user with postersThisMonth: 2 (at limit)
       // 2. atomicIncrementWithLimit throws ConditionalCheckFailedException
-      // 3. getUsage is called which calls getById
+      // Implementation uses already-fetched user data (no redundant getUsage call)
       mockSend
         .mockResolvedValueOnce({
           Item: {
@@ -76,26 +79,16 @@ describe('UserRepository', () => {
         })
         .mockRejectedValueOnce(
           new ConditionalCheckFailedException({ message: 'Limit exceeded', $metadata: {} })
-        )
-        .mockResolvedValueOnce({
-          Item: {
-            PK: 'USER#user-123',
-            SK: 'PROFILE',
-            userId: 'user-123',
-            email: 'test@example.com',
-            subscriptionTier: 'free',
-            postersThisMonth: 2,
-            usageResetAt: FUTURE_RESET_DATE,
-            createdAt: '2026-01-01T00:00:00.000Z',
-            updatedAt: '2026-01-01T00:00:00.000Z',
-          },
-        });
+        );
 
       const result = await repo.checkAndIncrementUsage('user-123');
 
       expect(result.allowed).toBe(false);
       expect(result.used).toBe(2);
       expect(result.remaining).toBe(0);
+      expect(result.resetsAt).toBe(FUTURE_RESET_DATE);
+      // Verify no redundant getUsage call - only 2 DB calls (getById + atomic update)
+      expect(mockSend).toHaveBeenCalledTimes(2);
     });
 
     it('resets usage when past reset date', async () => {

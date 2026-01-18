@@ -25,13 +25,16 @@ import {
 } from '@bjj-poster/core';
 import type { InitBundledFontsResult } from '@bjj-poster/core';
 import { db } from '@bjj-poster/db';
-import type { BeltRank } from '@bjj-poster/db';
 import { parseMultipart, parseMultipartBase64 } from '../../lib/multipart.js';
 import { uploadMultipleToS3, generatePosterKeys, deleteFromS3 } from '../../lib/s3.js';
 import { generatePosterSchema } from './types.js';
 import type { GeneratePosterResponse, QuotaExceededResponse } from './types.js';
 
-// Thumbnail dimensions: 400x560 maintains 5:7 aspect ratio matching poster dimensions
+// Thumbnail dimensions: 400x560 maintains 5:7 aspect ratio
+// This matches the standard BJJ tournament poster template dimensions.
+// All templates currently use 5:7 ratio (portrait orientation optimal for mobile).
+// If templates with different aspect ratios are added in the future,
+// consider adding thumbnailDimensions to template metadata instead.
 const THUMBNAIL_WIDTH = 400;
 const THUMBNAIL_HEIGHT = 560;
 
@@ -41,8 +44,14 @@ const THUMBNAIL_HEIGHT = 560;
 const THUMBNAIL_QUALITY = 80;
 const POSTER_QUALITY = 90;
 
+// Maximum file size for uploaded photos (10MB)
+// Must match MAX_FILE_SIZE in multipart.ts for consistent enforcement
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
 // Promise-based lock for font initialization to prevent concurrent init calls
+// fontInitFailed tracks if previous init failed, allowing retry on next request
 let fontInitPromise: Promise<InitBundledFontsResult> | null = null;
+let fontInitFailed = false;
 
 // Get allowed origins from environment or use restrictive default
 const ALLOWED_ORIGIN = process.env.CORS_ALLOWED_ORIGIN || 'https://bjj-poster.com';
@@ -76,12 +85,21 @@ function createResponse(
   };
 }
 
+/**
+ * Standard error response format for consistent client-side error handling.
+ * All errors return { message, code } with an optional details field.
+ */
 function createErrorResponse(
   statusCode: number,
   message: string,
-  code: string
+  code: string,
+  details?: unknown
 ): APIGatewayProxyResult {
-  return createResponse(statusCode, { message, code });
+  const body: { message: string; code: string; details?: unknown } = { message, code };
+  if (details !== undefined) {
+    body.details = details;
+  }
+  return createResponse(statusCode, body);
 }
 
 /**
@@ -160,7 +178,13 @@ export const handler = async (
     return createErrorResponse(400, 'Photo is required', 'MISSING_PHOTO');
   }
 
-  // 4. Validate actual image format with sharp (security - don't trust MIME header)
+  // 4. Explicit buffer size check (defense in depth against malformed requests)
+  // Busboy enforces streaming limit, but this catches edge cases and provides clear error
+  if (parsed.file.buffer.length > MAX_FILE_SIZE_BYTES) {
+    return createErrorResponse(413, 'Photo exceeds 10MB limit', 'PHOTO_TOO_LARGE');
+  }
+
+  // 5. Validate actual image format with sharp (security - don't trust MIME header)
   const imageValidation = await validateImageFormat(parsed.file.buffer);
   if (!imageValidation.valid) {
     console.warn('Invalid image rejected', {
@@ -173,19 +197,15 @@ export const handler = async (
     return createErrorResponse(400, 'Photo must be a valid JPEG or PNG image', 'INVALID_PHOTO');
   }
 
-  // 5. Validate fields with Zod
+  // 6. Validate fields with Zod
   const validation = generatePosterSchema.safeParse(parsed.fields);
   if (!validation.success) {
-    return createResponse(400, {
-      message: 'Invalid request',
-      code: 'VALIDATION_ERROR',
-      details: validation.error.issues,
-    });
+    return createErrorResponse(400, 'Invalid request', 'VALIDATION_ERROR', validation.error.issues);
   }
 
   const input = validation.data;
 
-  // 6. Atomically check and reserve quota BEFORE any expensive operations
+  // 7. Atomically check and reserve quota BEFORE any expensive operations
   // This prevents race conditions where concurrent requests could bypass limits
   const usageResult = await db.users.checkAndIncrementUsage(userId);
   if (!usageResult.allowed) {
@@ -207,21 +227,28 @@ export const handler = async (
   let s3Keys: { imageKey: string; thumbnailKey: string; uploadKey: string } | null = null;
 
   try {
-    // 7. Initialize fonts once (cold start) using Promise lock for thread safety
-    // Reset promise on failure to allow retry on next request
-    if (!fontInitPromise) {
-      console.log('Initializing bundled fonts', { requestId });
+    // 8. Initialize fonts once (cold start) using Promise lock for thread safety
+    // fontInitFailed allows retry on subsequent requests if previous init failed
+    if (!fontInitPromise && !fontInitFailed) {
       fontInitPromise = initBundledFonts();
+    }
+    if (fontInitFailed) {
+      // Retry initialization on new request after previous failure
+      console.warn('Retrying font initialization after previous failure', { requestId });
+      fontInitPromise = initBundledFonts();
+      fontInitFailed = false;
     }
     try {
       await fontInitPromise;
     } catch (fontError) {
-      // Reset promise so next request can retry initialization
+      // Mark as failed so next request can retry, but don't null the promise
+      // to avoid race conditions with concurrent requests
+      fontInitFailed = true;
       fontInitPromise = null;
       throw fontError;
     }
 
-    // 8. Sanitize text inputs to prevent XSS in rendered output
+    // 9. Sanitize text inputs to prevent XSS in rendered output
     const sanitizedData = {
       athleteName: sanitizeText(input.athleteName),
       teamName: input.teamName ? sanitizeText(input.teamName) : '',
@@ -231,8 +258,7 @@ export const handler = async (
       location: input.tournamentLocation ? sanitizeText(input.tournamentLocation) : '',
     };
 
-    // 9. Generate poster using composePoster
-    console.log('Composing poster', { requestId, templateId: input.templateId });
+    // 10. Generate poster using composePoster
     const posterResult = await composePoster({
       templateId: input.templateId,
       athletePhoto: parsed.file.buffer,
@@ -243,36 +269,33 @@ export const handler = async (
       },
     });
 
-    // 10. Generate thumbnail
-    console.log('Generating thumbnail', { requestId });
+    // 11. Generate thumbnail
     const thumbnail = await sharp(posterResult.buffer)
       .resize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, { fit: 'cover' })
       .jpeg({ quality: THUMBNAIL_QUALITY })
       .toBuffer();
 
-    // 11. Generate poster ID and S3 keys BEFORE any writes
+    // 12. Generate poster ID and S3 keys BEFORE any writes
     const posterId = `pstr_${nanoid(12)}`;
     const uploadFormat = imageValidation.format as 'jpeg' | 'png';
     const keys = generatePosterKeys(userId, posterId, uploadFormat);
     s3Keys = keys; // Track for cleanup on failure
 
-    // 12. Upload to S3 first (if this fails, we haven't touched the DB yet)
-    console.log('Uploading to S3', { requestId, posterId });
+    // 13. Upload to S3 first (if this fails, we haven't touched the DB yet)
     const [posterUpload, thumbnailUpload] = await uploadMultipleToS3([
       { key: keys.imageKey, buffer: posterResult.buffer, contentType: 'image/jpeg' },
       { key: keys.thumbnailKey, buffer: thumbnail, contentType: 'image/jpeg' },
       { key: keys.uploadKey, buffer: parsed.file.buffer, contentType: `image/${imageValidation.format}` },
     ]);
 
-    // 13. Save to DynamoDB with correct S3 keys
-    console.log('Saving to DynamoDB', { requestId, posterId });
+    // 14. Save to DynamoDB with correct S3 keys
     const poster = await db.posters.create({
       posterId,
       userId,
       templateId: input.templateId,
       athleteName: input.athleteName,
       teamName: input.teamName,
-      beltRank: input.beltRank as BeltRank,
+      beltRank: input.beltRank,
       tournamentName: input.tournamentName,
       tournamentDate: input.tournamentDate,
       tournamentLocation: input.tournamentLocation,
@@ -286,7 +309,7 @@ export const handler = async (
     quotaConsumed = false;
     s3Keys = null; // No cleanup needed
 
-    // 14. Return success response
+    // 15. Return success response
     const response: GeneratePosterResponse = {
       poster: {
         id: poster.posterId,
@@ -307,6 +330,7 @@ export const handler = async (
         used: usageResult.used,
         limit: usageResult.limit,
         remaining: usageResult.remaining,
+        resetsAt: usageResult.resetsAt,
       },
     };
 
@@ -319,7 +343,6 @@ export const handler = async (
     if (quotaConsumed) {
       try {
         await db.users.decrementUsage(userId);
-        console.log('Quota rolled back after failure', { requestId, userId });
       } catch (rollbackError) {
         console.error('Failed to rollback quota', { requestId, userId, error: rollbackError });
       }
@@ -334,7 +357,6 @@ export const handler = async (
           deleteFromS3(s3Keys.thumbnailKey),
           deleteFromS3(s3Keys.uploadKey),
         ]);
-        console.log('S3 cleanup completed', { requestId });
       } catch (cleanupError) {
         // Log but continue - S3 lifecycle rules can handle orphaned objects
         console.error('Failed to cleanup S3 objects', { requestId, error: cleanupError });

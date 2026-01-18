@@ -9,6 +9,10 @@ import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { TABLE_NAME } from '../config.js';
 import type { Poster, PosterItem, CreatePosterInput } from '../entities/poster.js';
 
+// Default limit for paginated poster queries
+// Balances data retrieval size with DynamoDB read capacity
+const DEFAULT_POSTER_QUERY_LIMIT = 50;
+
 export class PosterRepository {
   constructor(private readonly client: DynamoDBDocumentClient) {}
 
@@ -63,7 +67,7 @@ export class PosterRepository {
   /**
    * Get all posters for a user (newest first)
    */
-  async getByUserId(userId: string, limit = 50): Promise<Poster[]> {
+  async getByUserId(userId: string, limit = DEFAULT_POSTER_QUERY_LIMIT): Promise<Poster[]> {
     const result = await this.client.send(
       new QueryCommand({
         TableName: TABLE_NAME,

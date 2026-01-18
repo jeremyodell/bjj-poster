@@ -56,9 +56,15 @@ export class UserRepository {
   /**
    * Get a user by their Stripe subscription ID.
    *
-   * Note: This uses a scan with filter, which works for small-medium tables
-   * but should be replaced with a GSI query for larger scale.
-   * TODO: Add StripeSubscriptionIndex GSI for O(1) lookups.
+   * SCALE LIMITATIONS:
+   * This uses a scan with filter, which is O(n) where n is the total number
+   * of user records. Current acceptable limits:
+   * - Acceptable for < 10,000 users (scan takes < 1s, costs ~$0.00025 per call)
+   * - At 100,000 users: consider adding StripeSubscriptionIndex GSI
+   * - Stripe webhooks are infrequent (subscription events), so scan cost is low
+   *
+   * TODO(ODE-XXX): Add StripeSubscriptionIndex GSI when user count exceeds 10K.
+   * GSI would have: PK=stripeSubscriptionId, projections=[userId, email, tier]
    *
    * @param stripeSubscriptionId - The Stripe subscription ID
    * @returns The user if found, null otherwise
@@ -165,6 +171,11 @@ export class UserRepository {
    *
    * Uses DynamoDB conditional expressions to prevent race conditions where
    * concurrent requests could bypass quota limits.
+   *
+   * IMPORTANT: To prevent TOCTOU race conditions (where tier could change between
+   * reading the user and the atomic operation), the conditional expression also
+   * validates that the tier hasn't changed. If the tier changed to a more
+   * restrictive tier, the operation will fail with ConditionalCheckFailedException.
    */
   async checkAndIncrementUsage(userId: string): Promise<UsageCheckResult> {
     const user = await this.getById(userId);
@@ -179,7 +190,7 @@ export class UserRepository {
 
     // For unlimited tier, just increment without condition
     if (limit === -1) {
-      const result = await this.atomicIncrementUsage(userId, needsReset, newResetsAt, existingResetsAt);
+      const result = await this.atomicIncrementUsage(userId, tier, needsReset, newResetsAt, existingResetsAt);
       return {
         allowed: true,
         used: result.newCount,
@@ -190,8 +201,9 @@ export class UserRepository {
     }
 
     // For limited tiers, use conditional expression to enforce quota atomically
+    // Also validates tier hasn't changed to prevent TOCTOU race conditions
     try {
-      const result = await this.atomicIncrementWithLimit(userId, limit, needsReset, newResetsAt, existingResetsAt);
+      const result = await this.atomicIncrementWithLimit(userId, tier, limit, needsReset, newResetsAt, existingResetsAt);
       return {
         allowed: true,
         used: result.newCount,
@@ -200,7 +212,7 @@ export class UserRepository {
         resetsAt: result.resetsAt,
       };
     } catch (error) {
-      // ConditionalCheckFailedException means quota exceeded
+      // ConditionalCheckFailedException means quota exceeded OR tier changed
       if (error instanceof ConditionalCheckFailedException) {
         // Use already-fetched user data instead of redundant getUsage() call
         const currentUsage = needsReset ? 0 : (user?.postersThisMonth || 0);
@@ -217,15 +229,23 @@ export class UserRepository {
   }
 
   /**
-   * Atomically increment usage counter for unlimited tier users
+   * Atomically increment usage counter for unlimited tier users.
+   *
+   * Includes tier validation in conditional expression to prevent TOCTOU race
+   * conditions where a user could be downgraded between the tier check and increment.
    */
   private async atomicIncrementUsage(
     userId: string,
+    expectedTier: string,
     needsReset: boolean,
     newResetsAt: string,
     existingResetsAt: string
   ): Promise<{ newCount: number; resetsAt: string }> {
     const now = new Date().toISOString();
+
+    // Condition to validate tier hasn't changed (premium -> free would be a problem)
+    // For new users, subscriptionTier won't exist so we check for that too
+    const tierCondition = 'subscriptionTier = :expectedTier';
 
     if (needsReset) {
       // Reset counter to 1 for new period
@@ -234,26 +254,30 @@ export class UserRepository {
           TableName: TABLE_NAME,
           Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
           UpdateExpression: 'SET postersThisMonth = :one, usageResetAt = :reset, updatedAt = :now',
+          ConditionExpression: tierCondition,
           ExpressionAttributeValues: {
             ':one': 1,
             ':reset': newResetsAt,
             ':now': now,
+            ':expectedTier': expectedTier,
           },
         })
       );
       return { newCount: 1, resetsAt: newResetsAt };
     }
 
-    // Atomic increment using ADD
+    // Atomic increment using ADD with tier validation
     const result = await this.client.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
         UpdateExpression: 'SET postersThisMonth = if_not_exists(postersThisMonth, :zero) + :one, updatedAt = :now',
+        ConditionExpression: tierCondition,
         ExpressionAttributeValues: {
           ':one': 1,
           ':zero': 0,
           ':now': now,
+          ':expectedTier': expectedTier,
         },
         ReturnValues: 'UPDATED_NEW',
       })
@@ -266,10 +290,14 @@ export class UserRepository {
 
   /**
    * Atomically increment usage with limit check using conditional expression.
-   * Throws ConditionalCheckFailedException if limit would be exceeded.
+   * Throws ConditionalCheckFailedException if limit would be exceeded OR if tier changed.
+   *
+   * The tier validation prevents TOCTOU race conditions where a user could be
+   * upgraded/downgraded between the initial tier check and this atomic operation.
    */
   private async atomicIncrementWithLimit(
     userId: string,
+    expectedTier: string,
     limit: number,
     needsReset: boolean,
     newResetsAt: string,
@@ -277,36 +305,48 @@ export class UserRepository {
   ): Promise<{ newCount: number; resetsAt: string }> {
     const now = new Date().toISOString();
 
+    // Tier validation: for new users (no tier set), they default to 'free'
+    // We check both: tier matches expected OR tier doesn't exist and expected is 'free'
+    const tierCondition = expectedTier === 'free'
+      ? '(attribute_not_exists(subscriptionTier) OR subscriptionTier = :expectedTier)'
+      : 'subscriptionTier = :expectedTier';
+
     if (needsReset) {
       // Reset counter to 1 for new period (always allowed since limit >= 1)
+      // Include tier validation to prevent TOCTOU
       await this.client.send(
         new UpdateCommand({
           TableName: TABLE_NAME,
           Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
           UpdateExpression: 'SET postersThisMonth = :one, usageResetAt = :reset, updatedAt = :now',
+          ConditionExpression: tierCondition,
           ExpressionAttributeValues: {
             ':one': 1,
             ':reset': newResetsAt,
             ':now': now,
+            ':expectedTier': expectedTier,
           },
         })
       );
       return { newCount: 1, resetsAt: newResetsAt };
     }
 
-    // Atomic increment with condition: only if current count < limit
+    // Atomic increment with conditions:
+    // 1. Current count < limit (quota check)
+    // 2. Tier hasn't changed (TOCTOU prevention)
     // Using SET with if_not_exists ensures atomicity even for new users
     const result = await this.client.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { PK: `USER#${userId}`, SK: 'PROFILE' },
         UpdateExpression: 'SET postersThisMonth = if_not_exists(postersThisMonth, :zero) + :one, updatedAt = :now',
-        ConditionExpression: 'attribute_not_exists(postersThisMonth) OR postersThisMonth < :limit',
+        ConditionExpression: `(attribute_not_exists(postersThisMonth) OR postersThisMonth < :limit) AND ${tierCondition}`,
         ExpressionAttributeValues: {
           ':one': 1,
           ':zero': 0,
           ':limit': limit,
           ':now': now,
+          ':expectedTier': expectedTier,
         },
         ReturnValues: 'UPDATED_NEW',
       })

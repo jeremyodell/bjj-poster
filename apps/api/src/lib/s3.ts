@@ -12,9 +12,10 @@ const isLocal = process.env.USE_LOCALSTACK === 'true';
 // Request timeout for S3 operations (30 seconds)
 const S3_REQUEST_TIMEOUT_MS = 30_000;
 
-// Retry configuration
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY_MS = 1000;
+// Retry configuration - configurable via environment for different stages
+// Production may want more retries, dev/test may want fewer for faster feedback
+const MAX_RETRIES = parseInt(process.env.S3_MAX_RETRIES || '3', 10);
+const INITIAL_RETRY_DELAY_MS = parseInt(process.env.S3_INITIAL_RETRY_DELAY_MS || '1000', 10);
 
 export const s3Client = new S3Client(
   isLocal
@@ -124,6 +125,16 @@ export async function uploadMultipleToS3(
 
 /**
  * Generate S3 keys for a poster
+ *
+ * S3 Key Structure:
+ * - posters/{userId}/{posterId}/original.jpg  - Final generated poster (always JPEG)
+ * - posters/{userId}/{posterId}/thumbnail.jpg - Thumbnail preview (always JPEG)
+ * - uploads/{userId}/{posterId}/photo.{ext}   - Original user photo (preserves format)
+ *
+ * Note on upload key naming:
+ * - Uses generic "photo" name instead of original filename for privacy (filenames may contain PII)
+ * - HEIC uploads are converted to JPEG by sharp during validation, so only jpg/png in uploads/
+ * - uploads/ directory has S3 lifecycle rule to auto-delete after 7 days (see storage-stack.ts)
  *
  * @param userId - User ID
  * @param posterId - Poster ID
