@@ -202,13 +202,14 @@ export class UserRepository {
     } catch (error) {
       // ConditionalCheckFailedException means quota exceeded
       if (error instanceof ConditionalCheckFailedException) {
-        const currentUsage = await this.getUsage(userId);
+        // Use already-fetched user data instead of redundant getUsage() call
+        const currentUsage = needsReset ? 0 : (user?.postersThisMonth || 0);
         return {
           allowed: false,
-          used: currentUsage.used,
+          used: currentUsage,
           limit,
           remaining: 0,
-          resetsAt: currentUsage.resetsAt,
+          resetsAt: existingResetsAt,
         };
       }
       throw error;

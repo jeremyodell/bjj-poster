@@ -22,6 +22,9 @@ export interface ParsedMultipart {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+// Allowed MIME types for early rejection (actual format validated by sharp later)
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/heic', 'image/heif'];
+
 /**
  * Internal parser that handles the busboy stream processing
  */
@@ -49,6 +52,15 @@ function createBusboyParser(
 
     busboy.on('file', (fieldname, stream, info) => {
       const { filename, encoding, mimeType } = info;
+
+      // Early rejection of invalid MIME types to avoid buffering garbage
+      // Note: Actual image format is validated with sharp after parsing
+      if (!ALLOWED_MIME_TYPES.includes(mimeType.toLowerCase())) {
+        stream.resume(); // Drain the stream
+        reject(new Error(`Invalid file type: ${mimeType}. Allowed types: JPEG, PNG, HEIC`));
+        return;
+      }
+
       const chunks: Buffer[] = [];
 
       stream.on('data', (chunk: Buffer) => {

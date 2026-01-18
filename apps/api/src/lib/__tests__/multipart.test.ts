@@ -153,10 +153,10 @@ describe('parseMultipartBase64', () => {
       ``,
       `Test User`,
       `------boundary`,
-      `Content-Disposition: form-data; name="file"; filename="test.txt"`,
-      `Content-Type: text/plain`,
+      `Content-Disposition: form-data; name="file"; filename="test.jpg"`,
+      `Content-Type: image/jpeg`,
       ``,
-      `Hello World`,
+      `fake-image-data`,
       `------boundary--`,
     ].join('\r\n');
 
@@ -169,8 +169,8 @@ describe('parseMultipartBase64', () => {
 
     expect(result.fields.name).toBe('Test User');
     expect(result.file).toBeDefined();
-    expect(result.file?.filename).toBe('test.txt');
-    expect(result.file?.buffer.toString()).toBe('Hello World');
+    expect(result.file?.filename).toBe('test.jpg');
+    expect(result.file?.buffer.toString()).toBe('fake-image-data');
   });
 
   it('throws on invalid content-type for base64 parser', async () => {
@@ -178,6 +178,23 @@ describe('parseMultipartBase64', () => {
     await expect(
       parseMultipartBase64(base64Body, 'application/json')
     ).rejects.toThrow('Invalid content type: expected multipart/form-data');
+  });
+
+  it('rejects files with invalid MIME types', async () => {
+    const rawBody = [
+      `------boundary`,
+      `Content-Disposition: form-data; name="file"; filename="test.txt"`,
+      `Content-Type: text/plain`,
+      ``,
+      `Hello World`,
+      `------boundary--`,
+    ].join('\r\n');
+
+    const base64Body = Buffer.from(rawBody).toString('base64');
+
+    await expect(
+      parseMultipartBase64(base64Body, 'multipart/form-data; boundary=----boundary')
+    ).rejects.toThrow('Invalid file type: text/plain');
   });
 
   it('handles binary data in base64 encoding', async () => {

@@ -34,6 +34,10 @@ import type { GeneratePosterResponse, QuotaExceededResponse } from './types.js';
 // Thumbnail dimensions: 400x560 maintains 5:7 aspect ratio matching poster dimensions
 const THUMBNAIL_WIDTH = 400;
 const THUMBNAIL_HEIGHT = 560;
+
+// JPEG quality settings (1-100 scale)
+// - THUMBNAIL_QUALITY: 80 balances ~50KB file size with acceptable visual quality for previews
+// - POSTER_QUALITY: 90 provides near-lossless quality for final downloadable posters
 const THUMBNAIL_QUALITY = 80;
 const POSTER_QUALITY = 90;
 
@@ -140,8 +144,13 @@ export const handler = async (
       : await parseMultipart(event.body, contentType);
   } catch (error) {
     console.error('Multipart parsing error', { requestId, error });
-    if (error instanceof Error && error.message.includes('exceeds maximum size')) {
-      return createErrorResponse(413, 'Photo exceeds 10MB limit', 'PHOTO_TOO_LARGE');
+    if (error instanceof Error) {
+      if (error.message.includes('exceeds maximum size')) {
+        return createErrorResponse(413, 'Photo exceeds 10MB limit', 'PHOTO_TOO_LARGE');
+      }
+      if (error.message.includes('Invalid file type')) {
+        return createErrorResponse(400, 'Photo must be JPEG, PNG, or HEIC format', 'INVALID_FILE_TYPE');
+      }
     }
     return createErrorResponse(400, 'Invalid multipart form data', 'INVALID_MULTIPART');
   }
@@ -199,11 +208,18 @@ export const handler = async (
 
   try {
     // 7. Initialize fonts once (cold start) using Promise lock for thread safety
+    // Reset promise on failure to allow retry on next request
     if (!fontInitPromise) {
       console.log('Initializing bundled fonts', { requestId });
       fontInitPromise = initBundledFonts();
     }
-    await fontInitPromise;
+    try {
+      await fontInitPromise;
+    } catch (fontError) {
+      // Reset promise so next request can retry initialization
+      fontInitPromise = null;
+      throw fontError;
+    }
 
     // 8. Sanitize text inputs to prevent XSS in rendered output
     const sanitizedData = {
