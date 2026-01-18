@@ -31,11 +31,20 @@ export type {
   WebhookEventItem,
 } from './entities/webhook-event.js';
 
+export type {
+  Poster,
+  PosterItem,
+  BeltRank,
+  PosterStatus,
+  CreatePosterInput,
+} from './entities/poster.js';
+
 // Re-export repository classes (for testing/DI)
 export { TemplateRepository } from './repositories/template-repository.js';
-export { UserRepository } from './repositories/user-repository.js';
+export { UserRepository, type UsageCheckResult } from './repositories/user-repository.js';
 export { WebhookEventRepository } from './repositories/webhook-event-repository.js';
 export { RateLimitRepository } from './repositories/rate-limit-repository.js';
+export { PosterRepository } from './repositories/poster-repository.js';
 
 // Re-export client and config
 export { dynamoClient } from './client.js';
@@ -52,11 +61,12 @@ import { TemplateRepository } from './repositories/template-repository.js';
 import { UserRepository } from './repositories/user-repository.js';
 import { WebhookEventRepository } from './repositories/webhook-event-repository.js';
 import { RateLimitRepository } from './repositories/rate-limit-repository.js';
+import { PosterRepository } from './repositories/poster-repository.js';
 
 export const db = {
   templates: new TemplateRepository(dynamoClient),
   users: new UserRepository(dynamoClient),
   webhookEvents: new WebhookEventRepository(dynamoClient),
   rateLimits: new RateLimitRepository(dynamoClient),
-  // posters: new PosterRepository(dynamoClient),
+  posters: new PosterRepository(dynamoClient),
 };

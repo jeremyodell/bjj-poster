@@ -10,6 +10,7 @@ import type { APIGatewayProxyEvent, Context } from 'aws-lambda';
 import { handler as helloHandler } from './handlers/hello/index.js';
 import { listTemplatesHandler } from './handlers/templates/index.js';
 import { createCheckoutSessionHandler, stripeWebhookHandler } from './handlers/payments/index.js';
+import { handler as generatePosterHandler } from './handlers/posters/generate-poster.js';
 // import { handler as getProfile } from './handlers/user/get-profile';
 // import { handler as createPoster } from './handlers/poster/create-poster';
 
@@ -19,6 +20,9 @@ const PORT = process.env.PORT || 3001;
 // Stripe webhook needs raw body for signature verification
 // Must be registered BEFORE express.json() middleware
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
+
+// Raw body for multipart form data (generate poster)
+app.use('/api/posters/generate', express.raw({ type: 'multipart/form-data', limit: '15mb' }));
 
 // JSON parsing for all other routes
 app.use(express.json());
@@ -182,6 +186,9 @@ app.post('/api/payments/checkout', lambdaAdapter(createCheckoutSessionHandler));
 
 // Stripe webhook (raw body parsing configured above for signature verification)
 app.post('/api/payments/webhook', lambdaAdapter(stripeWebhookHandler));
+
+// Generate poster (raw body parsing configured above for multipart form data)
+app.post('/api/posters/generate', lambdaAdapter(generatePosterHandler));
 
 // Error handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

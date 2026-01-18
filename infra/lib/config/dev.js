@@ -1,0 +1,19 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.devConfig = void 0;
+exports.devConfig = {
+    stage: 'dev',
+    region: 'us-east-1',
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    apiDomain: 'api-dev.bjjposter.app',
+    webDomain: 'dev.bjjposter.app',
+    apiThrottleRate: 100,
+    apiThrottleBurst: 200,
+    lambdaMemory: 1024,
+    lambdaTimeout: 30,
+    dynamoDbBillingMode: 'PAY_PER_REQUEST',
+    posterBucketName: 'bjj-poster-app-dev-posters',
+    cognitoUserPoolName: 'bjj-poster-app-dev',
+    enableCdn: false
+};
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZGV2LmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiZGV2LnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7OztBQUVhLFFBQUEsU0FBUyxHQUFzQjtJQUMxQyxLQUFLLEVBQUUsS0FBSztJQUNaLE1BQU0sRUFBRSxXQUFXO0lBQ25CLE9BQU8sRUFBRSxPQUFPLENBQUMsR0FBRyxDQUFDLG1CQUFvQjtJQUN6QyxTQUFTLEVBQUUsdUJBQXVCO0lBQ2xDLFNBQVMsRUFBRSxtQkFBbUI7SUFDOUIsZUFBZSxFQUFFLEdBQUc7SUFDcEIsZ0JBQWdCLEVBQUUsR0FBRztJQUNyQixZQUFZLEVBQUUsSUFBSTtJQUNsQixhQUFhLEVBQUUsRUFBRTtJQUNqQixtQkFBbUIsRUFBRSxpQkFBaUI7SUFDdEMsZ0JBQWdCLEVBQUUsNEJBQTRCO0lBQzlDLG1CQUFtQixFQUFFLG9CQUFvQjtJQUN6QyxTQUFTLEVBQUUsS0FBSztDQUNqQixDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgRW52aXJvbm1lbnRDb25maWcgfSBmcm9tICcuL3R5cGVzJztcblxuZXhwb3J0IGNvbnN0IGRldkNvbmZpZzogRW52aXJvbm1lbnRDb25maWcgPSB7XG4gIHN0YWdlOiAnZGV2JyxcbiAgcmVnaW9uOiAndXMtZWFzdC0xJyxcbiAgYWNjb3VudDogcHJvY2Vzcy5lbnYuQ0RLX0RFRkFVTFRfQUNDT1VOVCEsXG4gIGFwaURvbWFpbjogJ2FwaS1kZXYuYmpqcG9zdGVyLmFwcCcsXG4gIHdlYkRvbWFpbjogJ2Rldi5iampwb3N0ZXIuYXBwJyxcbiAgYXBpVGhyb3R0bGVSYXRlOiAxMDAsXG4gIGFwaVRocm90dGxlQnVyc3Q6IDIwMCxcbiAgbGFtYmRhTWVtb3J5OiAxMDI0LFxuICBsYW1iZGFUaW1lb3V0OiAzMCxcbiAgZHluYW1vRGJCaWxsaW5nTW9kZTogJ1BBWV9QRVJfUkVRVUVTVCcsXG4gIHBvc3RlckJ1Y2tldE5hbWU6ICdiamotcG9zdGVyLWFwcC1kZXYtcG9zdGVycycsXG4gIGNvZ25pdG9Vc2VyUG9vbE5hbWU6ICdiamotcG9zdGVyLWFwcC1kZXYnLFxuICBlbmFibGVDZG46IGZhbHNlXG59O1xuIl19
