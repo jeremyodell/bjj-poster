@@ -31,7 +31,6 @@ describe('UserRepository', () => {
     it('allows usage when under limit', async () => {
       // 1. getById returns user with postersThisMonth: 1
       // 2. atomicIncrementWithLimit UpdateCommand returns Attributes with new count
-      // 3. getById again to get resetsAt
       mockSend
         .mockResolvedValueOnce({
           Item: {
@@ -46,15 +45,7 @@ describe('UserRepository', () => {
             updatedAt: '2026-01-01T00:00:00.000Z',
           },
         })
-        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 2 } })
-        .mockResolvedValueOnce({
-          Item: {
-            PK: 'USER#user-123',
-            SK: 'PROFILE',
-            userId: 'user-123',
-            usageResetAt: FUTURE_RESET_DATE,
-          },
-        });
+        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 2 } });
 
       const result = await repo.checkAndIncrementUsage('user-123');
 
@@ -62,6 +53,7 @@ describe('UserRepository', () => {
       expect(result.used).toBe(2);
       expect(result.limit).toBe(2);
       expect(result.remaining).toBe(0);
+      expect(result.resetsAt).toBe(FUTURE_RESET_DATE);
     });
 
     it('denies usage when at limit', async () => {
@@ -135,7 +127,6 @@ describe('UserRepository', () => {
       // Premium uses atomicIncrementUsage (not WithLimit)
       // 1. getById returns premium user
       // 2. atomicIncrementUsage UpdateCommand with ReturnValues
-      // 3. getById to get resetsAt
       mockSend
         .mockResolvedValueOnce({
           Item: {
@@ -150,28 +141,21 @@ describe('UserRepository', () => {
             updatedAt: '2026-01-01T00:00:00.000Z',
           },
         })
-        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 101 } })
-        .mockResolvedValueOnce({
-          Item: {
-            userId: 'user-123',
-            usageResetAt: FUTURE_RESET_DATE,
-          },
-        });
+        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 101 } });
 
       const result = await repo.checkAndIncrementUsage('user-123');
 
       expect(result.allowed).toBe(true);
       expect(result.limit).toBe(-1);
+      expect(result.resetsAt).toBe(FUTURE_RESET_DATE);
     });
 
     it('creates new user record when user does not exist', async () => {
       // 1. getById returns null
       // 2. atomicIncrementWithLimit UpdateCommand succeeds
-      // 3. getById returns null (user still doesn't have full record)
       mockSend
         .mockResolvedValueOnce({ Item: null })
-        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 1 } })
-        .mockResolvedValueOnce({ Item: null });
+        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 1 } });
 
       const result = await repo.checkAndIncrementUsage('new-user');
 
@@ -196,13 +180,7 @@ describe('UserRepository', () => {
             updatedAt: '2026-01-01T00:00:00.000Z',
           },
         })
-        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 20 } })
-        .mockResolvedValueOnce({
-          Item: {
-            userId: 'user-123',
-            usageResetAt: FUTURE_RESET_DATE,
-          },
-        });
+        .mockResolvedValueOnce({ Attributes: { postersThisMonth: 20 } });
 
       const result = await repo.checkAndIncrementUsage('user-123');
 
@@ -210,6 +188,7 @@ describe('UserRepository', () => {
       expect(result.used).toBe(20);
       expect(result.limit).toBe(20);
       expect(result.remaining).toBe(0);
+      expect(result.resetsAt).toBe(FUTURE_RESET_DATE);
     });
   });
 

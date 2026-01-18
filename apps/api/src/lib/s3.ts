@@ -5,6 +5,7 @@
  */
 
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { ExternalServiceError } from '@bjj-poster/core';
 
 const isLocal = process.env.USE_LOCALSTACK === 'true';
 
@@ -93,7 +94,7 @@ export async function uploadToS3(
     }
   }
 
-  throw new Error(`S3 upload failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+  throw new ExternalServiceError(`S3 upload failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
 }
 
 /**
@@ -123,14 +124,20 @@ export async function uploadMultipleToS3(
 
 /**
  * Generate S3 keys for a poster
+ *
+ * @param userId - User ID
+ * @param posterId - Poster ID
+ * @param uploadFormat - Original photo format ('jpeg' or 'png') for the upload key
  */
 export function generatePosterKeys(
   userId: string,
-  posterId: string
+  posterId: string,
+  uploadFormat: 'jpeg' | 'png' = 'jpeg'
 ): { imageKey: string; thumbnailKey: string; uploadKey: string } {
+  const uploadExtension = uploadFormat === 'png' ? 'png' : 'jpg';
   return {
     imageKey: `posters/${userId}/${posterId}/original.jpg`,
     thumbnailKey: `posters/${userId}/${posterId}/thumbnail.jpg`,
-    uploadKey: `uploads/${userId}/${posterId}/photo.jpg`,
+    uploadKey: `uploads/${userId}/${posterId}/photo.${uploadExtension}`,
   };
 }

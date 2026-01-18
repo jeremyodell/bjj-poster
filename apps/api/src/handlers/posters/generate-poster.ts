@@ -23,6 +23,7 @@ import {
   FontLoadError,
   ExternalServiceError,
 } from '@bjj-poster/core';
+import type { InitBundledFontsResult } from '@bjj-poster/core';
 import { db } from '@bjj-poster/db';
 import type { BeltRank } from '@bjj-poster/db';
 import { parseMultipart, parseMultipartBase64 } from '../../lib/multipart.js';
@@ -30,13 +31,14 @@ import { uploadMultipleToS3, generatePosterKeys, deleteFromS3 } from '../../lib/
 import { generatePosterSchema } from './types.js';
 import type { GeneratePosterResponse, QuotaExceededResponse } from './types.js';
 
+// Thumbnail dimensions: 400x560 maintains 5:7 aspect ratio matching poster dimensions
 const THUMBNAIL_WIDTH = 400;
 const THUMBNAIL_HEIGHT = 560;
 const THUMBNAIL_QUALITY = 80;
 const POSTER_QUALITY = 90;
 
-// Track font initialization
-let fontsInitialized = false;
+// Promise-based lock for font initialization to prevent concurrent init calls
+let fontInitPromise: Promise<InitBundledFontsResult> | null = null;
 
 // Get allowed origins from environment or use restrictive default
 const ALLOWED_ORIGIN = process.env.CORS_ALLOWED_ORIGIN || 'https://bjj-poster.com';
@@ -196,12 +198,12 @@ export const handler = async (
   let s3Keys: { imageKey: string; thumbnailKey: string; uploadKey: string } | null = null;
 
   try {
-    // 7. Initialize fonts once (cold start)
-    if (!fontsInitialized) {
+    // 7. Initialize fonts once (cold start) using Promise lock for thread safety
+    if (!fontInitPromise) {
       console.log('Initializing bundled fonts', { requestId });
-      await initBundledFonts();
-      fontsInitialized = true;
+      fontInitPromise = initBundledFonts();
     }
+    await fontInitPromise;
 
     // 8. Sanitize text inputs to prevent XSS in rendered output
     const sanitizedData = {
@@ -234,7 +236,8 @@ export const handler = async (
 
     // 11. Generate poster ID and S3 keys BEFORE any writes
     const posterId = `pstr_${nanoid(12)}`;
-    const keys = generatePosterKeys(userId, posterId);
+    const uploadFormat = imageValidation.format as 'jpeg' | 'png';
+    const keys = generatePosterKeys(userId, posterId, uploadFormat);
     s3Keys = keys; // Track for cleanup on failure
 
     // 12. Upload to S3 first (if this fails, we haven't touched the DB yet)

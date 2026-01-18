@@ -172,13 +172,14 @@ export class UserRepository {
     const tier = user?.subscriptionTier || 'free';
     const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
     const newResetsAt = this.getNextResetDate();
+    const existingResetsAt = user?.usageResetAt || newResetsAt;
 
     // Check if usage needs reset (new month)
     const needsReset = !user?.usageResetAt || new Date(user.usageResetAt) <= now;
 
     // For unlimited tier, just increment without condition
     if (limit === -1) {
-      const result = await this.atomicIncrementUsage(userId, needsReset, newResetsAt);
+      const result = await this.atomicIncrementUsage(userId, needsReset, newResetsAt, existingResetsAt);
       return {
         allowed: true,
         used: result.newCount,
@@ -190,7 +191,7 @@ export class UserRepository {
 
     // For limited tiers, use conditional expression to enforce quota atomically
     try {
-      const result = await this.atomicIncrementWithLimit(userId, limit, needsReset, newResetsAt);
+      const result = await this.atomicIncrementWithLimit(userId, limit, needsReset, newResetsAt, existingResetsAt);
       return {
         allowed: true,
         used: result.newCount,
@@ -220,7 +221,8 @@ export class UserRepository {
   private async atomicIncrementUsage(
     userId: string,
     needsReset: boolean,
-    newResetsAt: string
+    newResetsAt: string,
+    existingResetsAt: string
   ): Promise<{ newCount: number; resetsAt: string }> {
     const now = new Date().toISOString();
 
@@ -257,8 +259,8 @@ export class UserRepository {
     );
 
     const newCount = (result.Attributes?.postersThisMonth as number) || 1;
-    const user = await this.getById(userId);
-    return { newCount, resetsAt: user?.usageResetAt || newResetsAt };
+    // Use existing resetsAt from the user we already fetched (no extra DB call)
+    return { newCount, resetsAt: existingResetsAt };
   }
 
   /**
@@ -269,7 +271,8 @@ export class UserRepository {
     userId: string,
     limit: number,
     needsReset: boolean,
-    newResetsAt: string
+    newResetsAt: string,
+    existingResetsAt: string
   ): Promise<{ newCount: number; resetsAt: string }> {
     const now = new Date().toISOString();
 
@@ -309,8 +312,8 @@ export class UserRepository {
     );
 
     const newCount = (result.Attributes?.postersThisMonth as number) || 1;
-    const user = await this.getById(userId);
-    return { newCount, resetsAt: user?.usageResetAt || newResetsAt };
+    // Use existing resetsAt from the user we already fetched (no extra DB call)
+    return { newCount, resetsAt: existingResetsAt };
   }
 
   /**
