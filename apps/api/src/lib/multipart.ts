@@ -2,6 +2,17 @@
  * Multipart Form Data Parser
  *
  * Parses multipart/form-data requests for Lambda handlers.
+ *
+ * LAMBDA MEMORY REQUIREMENTS:
+ * This parser buffers the entire file in memory before returning.
+ * With the 10MB file size limit and concurrent request handling,
+ * ensure Lambda is configured with adequate memory:
+ * - Minimum: 512MB for low concurrency
+ * - Recommended: 1024MB for production workloads
+ * - Consider: 2048MB if experiencing OOM errors under load
+ *
+ * Future optimization: Stream directly to S3 using multipart upload
+ * to reduce memory footprint for large files.
  */
 
 import Busboy from 'busboy';

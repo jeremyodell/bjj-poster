@@ -107,6 +107,10 @@ vi.mock('sharp', () => ({
   }),
 }));
 
+vi.mock('nanoid', () => ({
+  nanoid: vi.fn().mockReturnValue('test123456'),
+}));
+
 import { handler } from '../generate-poster.js';
 import { db } from '@bjj-poster/db';
 import { parseMultipart, parseMultipartBase64 } from '../../../lib/multipart.js';

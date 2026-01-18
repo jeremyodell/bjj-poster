@@ -2,6 +2,22 @@
  * S3 Upload Helpers
  *
  * Provides utilities for uploading and deleting files in S3.
+ *
+ * ORPHAN CLEANUP STRATEGY:
+ * When poster generation fails after S3 upload but before DB write, orphaned objects
+ * may remain if deleteFromS3() retries are exhausted. These are handled by:
+ *
+ * 1. S3 Lifecycle Rules (see infra/lib/storage-stack.ts):
+ *    - uploads/ prefix: Auto-delete after 7 days (originals not needed long-term)
+ *    - posters/ prefix: Consider adding rules to delete objects with no matching DB record
+ *
+ * 2. Monitoring (recommended):
+ *    - CloudWatch alarm on delete failure logs (filter: "S3 delete failed after")
+ *    - S3 inventory report to cross-reference with DynamoDB poster records
+ *    - Dashboard metric for orphan detection (s3 object count vs dynamodb poster count)
+ *
+ * The delete operation is best-effort by design - lifecycle rules provide eventual
+ * consistency, and failed deletes are logged for operational visibility.
  */
 
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
@@ -64,15 +80,22 @@ export interface UploadResult {
   url: string;
 }
 
+export interface UploadOptions {
+  /** Optional request ID for log correlation */
+  requestId?: string;
+}
+
 /**
  * Upload a buffer to S3 with retry logic
  */
 export async function uploadToS3(
   key: string,
   buffer: Buffer,
-  contentType: string
+  contentType: string,
+  options?: UploadOptions
 ): Promise<UploadResult> {
   let lastError: Error | undefined;
+  const { requestId } = options || {};
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -92,6 +115,7 @@ export async function uploadToS3(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       console.warn(`S3 upload attempt ${attempt}/${MAX_RETRIES} failed`, {
+        requestId,
         key,
         error: lastError.message,
       });
@@ -106,6 +130,11 @@ export async function uploadToS3(
   throw new ExternalServiceError(`S3 upload failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
 }
 
+export interface DeleteOptions {
+  /** Optional request ID for log correlation */
+  requestId?: string;
+}
+
 /**
  * Delete an object from S3 with retry logic (for cleanup on failures).
  *
@@ -113,8 +142,9 @@ export async function uploadToS3(
  * S3 lifecycle rules will eventually clean up orphaned objects, so we log
  * the error and continue rather than failing the overall operation.
  */
-export async function deleteFromS3(key: string): Promise<void> {
+export async function deleteFromS3(key: string, options?: DeleteOptions): Promise<void> {
   let lastError: Error | undefined;
+  const { requestId } = options || {};
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -135,6 +165,7 @@ export async function deleteFromS3(key: string): Promise<void> {
 
   // Don't throw - lifecycle rules will eventually clean up orphaned objects
   console.warn(`S3 delete failed after ${MAX_RETRIES} retries`, {
+    requestId,
     key,
     error: lastError?.message,
   });
@@ -144,11 +175,12 @@ export async function deleteFromS3(key: string): Promise<void> {
  * Upload multiple files to S3 in parallel
  */
 export async function uploadMultipleToS3(
-  uploads: Array<{ key: string; buffer: Buffer; contentType: string }>
+  uploads: Array<{ key: string; buffer: Buffer; contentType: string }>,
+  options?: UploadOptions
 ): Promise<UploadResult[]> {
   return Promise.all(
     uploads.map(({ key, buffer, contentType }) =>
-      uploadToS3(key, buffer, contentType)
+      uploadToS3(key, buffer, contentType, options)
     )
   );
 }

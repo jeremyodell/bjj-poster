@@ -8,9 +8,17 @@ export const beltRankSchema = z.enum(['white', 'blue', 'purple', 'brown', 'black
 
 /**
  * Belt rank type inferred from Zod schema.
- * This is structurally identical to BeltRank from @bjj-poster/db but derived
- * from the validation schema for type safety - ensures validated input is
- * correctly typed without casting.
+ *
+ * TYPE RELATIONSHIP WITH @bjj-poster/db:
+ * This type is structurally identical to BeltRank from @bjj-poster/db
+ * ('white' | 'blue' | 'purple' | 'brown' | 'black'). We define it separately
+ * here for these reasons:
+ * 1. The Zod schema is the source of truth for API validation
+ * 2. TypeScript's structural typing ensures assignment compatibility
+ * 3. Avoids circular dependency between API and DB packages
+ *
+ * If either type changes, TypeScript will catch the incompatibility at compile
+ * time when we assign validated input to DB functions (generate-poster.ts:294).
  */
 export type BeltRankInput = z.infer<typeof beltRankSchema>;
 

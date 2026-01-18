@@ -33,8 +33,11 @@ import type { GeneratePosterResponse, QuotaExceededResponse } from './types.js';
 // Thumbnail dimensions: 400x560 maintains 5:7 aspect ratio
 // This matches the standard BJJ tournament poster template dimensions.
 // All templates currently use 5:7 ratio (portrait orientation optimal for mobile).
-// If templates with different aspect ratios are added in the future,
-// consider adding thumbnailDimensions to template metadata instead.
+//
+// TODO(ODE-XXX): When adding templates with different aspect ratios, move these
+// dimensions to template metadata. Each template should define its own thumbnail
+// dimensions to preserve correct aspect ratio. Example template metadata structure:
+//   { id: 'landscape-1', dimensions: { width: 1920, height: 1080 }, thumbnail: { width: 560, height: 315 } }
 const THUMBNAIL_WIDTH = 400;
 const THUMBNAIL_HEIGHT = 560;
 
@@ -54,8 +57,23 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 // the next request will trigger a fresh initialization attempt.
 let fontInitPromise: Promise<InitBundledFontsResult> | null = null;
 
-// Get allowed origins from environment or use restrictive default
-const ALLOWED_ORIGIN = process.env.CORS_ALLOWED_ORIGIN || 'https://bjj-poster.com';
+// Allowed CORS origins from environment (comma-separated for multiple origins)
+// Example: "https://bjj-poster.com,https://staging.bjj-poster.com"
+const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGIN || 'https://bjj-poster.com')
+  .split(',')
+  .map(origin => origin.trim());
+
+/**
+ * Get the appropriate CORS origin header for a request.
+ * Returns the request origin if it's in the allowed list, otherwise returns the first allowed origin.
+ * This enables multi-environment setups (dev/staging/prod) with different origins.
+ */
+function getCorsOrigin(requestOrigin: string | undefined): string {
+  if (requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)) {
+    return requestOrigin;
+  }
+  return ALLOWED_ORIGINS[0];
+}
 
 /**
  * Sanitize text input to prevent XSS in rendered output.
@@ -72,13 +90,14 @@ function sanitizeText(text: string): string {
 
 function createResponse(
   statusCode: number,
-  body: unknown
+  body: unknown,
+  corsOrigin: string
 ): APIGatewayProxyResult {
   return {
     statusCode,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+      'Access-Control-Allow-Origin': corsOrigin,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
@@ -94,13 +113,14 @@ function createErrorResponse(
   statusCode: number,
   message: string,
   code: string,
+  corsOrigin: string,
   details?: unknown
 ): APIGatewayProxyResult {
   const body: { message: string; code: string; details?: unknown } = { message, code };
   if (details !== undefined) {
     body.details = details;
   }
-  return createResponse(statusCode, body);
+  return createResponse(statusCode, body, corsOrigin);
 }
 
 /**
@@ -137,12 +157,16 @@ export const handler = async (
   const requestId = event.requestContext.requestId;
   console.log('Generate poster handler invoked', { requestId });
 
+  // Get CORS origin for all responses (supports multi-origin configuration)
+  const requestOrigin = event.headers.origin || event.headers.Origin;
+  const corsOrigin = getCorsOrigin(requestOrigin);
+
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 204,
       headers: {
-        'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+        'Access-Control-Allow-Origin': corsOrigin,
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
@@ -153,18 +177,18 @@ export const handler = async (
   // 1. Extract userId from JWT - use typeof check for type narrowing instead of cast
   const userId = event.requestContext.authorizer?.claims?.sub;
   if (typeof userId !== 'string') {
-    return createErrorResponse(401, 'Authentication required', 'UNAUTHORIZED');
+    return createErrorResponse(401, 'Authentication required', 'UNAUTHORIZED', corsOrigin);
   }
   // userId is now typed as string after the type guard
 
   // 2. Parse multipart form data
   if (!event.body) {
-    return createErrorResponse(400, 'Request body is required', 'MISSING_BODY');
+    return createErrorResponse(400, 'Request body is required', 'MISSING_BODY', corsOrigin);
   }
 
   const contentType = event.headers['content-type'] || event.headers['Content-Type'] || '';
   if (!contentType.includes('multipart/form-data')) {
-    return createErrorResponse(400, 'Content-Type must be multipart/form-data', 'INVALID_CONTENT_TYPE');
+    return createErrorResponse(400, 'Content-Type must be multipart/form-data', 'INVALID_CONTENT_TYPE', corsOrigin);
   }
 
   let parsed;
@@ -176,24 +200,24 @@ export const handler = async (
     console.error('Multipart parsing error', { requestId, error });
     if (error instanceof Error) {
       if (error.message.includes('exceeds maximum size')) {
-        return createErrorResponse(413, 'Photo exceeds 10MB limit', 'PHOTO_TOO_LARGE');
+        return createErrorResponse(413, 'Photo exceeds 10MB limit', 'PHOTO_TOO_LARGE', corsOrigin);
       }
       if (error.message.includes('Invalid file type')) {
-        return createErrorResponse(400, 'Photo must be JPEG, PNG, or HEIC format', 'INVALID_FILE_TYPE');
+        return createErrorResponse(400, 'Photo must be JPEG, PNG, or HEIC format', 'INVALID_FILE_TYPE', corsOrigin);
       }
     }
-    return createErrorResponse(400, 'Invalid multipart form data', 'INVALID_MULTIPART');
+    return createErrorResponse(400, 'Invalid multipart form data', 'INVALID_MULTIPART', corsOrigin);
   }
 
   // 3. Validate photo exists
   if (!parsed.file) {
-    return createErrorResponse(400, 'Photo is required', 'MISSING_PHOTO');
+    return createErrorResponse(400, 'Photo is required', 'MISSING_PHOTO', corsOrigin);
   }
 
   // 4. Explicit buffer size check (defense in depth against malformed requests)
   // Busboy enforces streaming limit, but this catches edge cases and provides clear error
   if (parsed.file.buffer.length > MAX_FILE_SIZE_BYTES) {
-    return createErrorResponse(413, 'Photo exceeds 10MB limit', 'PHOTO_TOO_LARGE');
+    return createErrorResponse(413, 'Photo exceeds 10MB limit', 'PHOTO_TOO_LARGE', corsOrigin);
   }
 
   // 5. Validate actual image format with sharp (security - don't trust MIME header)
@@ -206,13 +230,13 @@ export const handler = async (
       claimedMimeType: parsed.file.mimeType,
       fileSize: parsed.file.buffer.length,
     });
-    return createErrorResponse(400, 'Photo must be a valid JPEG or PNG image', 'INVALID_PHOTO');
+    return createErrorResponse(400, 'Photo must be a valid JPEG or PNG image', 'INVALID_PHOTO', corsOrigin);
   }
 
   // 6. Validate fields with Zod
   const validation = generatePosterSchema.safeParse(parsed.fields);
   if (!validation.success) {
-    return createErrorResponse(400, 'Invalid request', 'VALIDATION_ERROR', validation.error.issues);
+    return createErrorResponse(400, 'Invalid request', 'VALIDATION_ERROR', corsOrigin, validation.error.issues);
   }
 
   const input = validation.data;
@@ -231,7 +255,7 @@ export const handler = async (
         resetsAt: usageResult.resetsAt,
       },
     };
-    return createResponse(403, response);
+    return createResponse(403, response, corsOrigin);
   }
 
   // From this point, we've consumed quota - must rollback on failure
@@ -284,11 +308,14 @@ export const handler = async (
     s3Keys = keys; // Track for cleanup on failure
 
     // 13. Upload to S3 first (if this fails, we haven't touched the DB yet)
-    const [posterUpload, thumbnailUpload] = await uploadMultipleToS3([
-      { key: keys.imageKey, buffer: posterResult.buffer, contentType: 'image/jpeg' },
-      { key: keys.thumbnailKey, buffer: thumbnail, contentType: 'image/jpeg' },
-      { key: keys.uploadKey, buffer: parsed.file.buffer, contentType: `image/${imageValidation.format}` },
-    ]);
+    const [posterUpload, thumbnailUpload] = await uploadMultipleToS3(
+      [
+        { key: keys.imageKey, buffer: posterResult.buffer, contentType: 'image/jpeg' },
+        { key: keys.thumbnailKey, buffer: thumbnail, contentType: 'image/jpeg' },
+        { key: keys.uploadKey, buffer: parsed.file.buffer, contentType: `image/${imageValidation.format}` },
+      ],
+      { requestId }
+    );
 
     // 14. Save to DynamoDB with correct S3 keys
     const poster = await db.posters.create({
@@ -337,7 +364,7 @@ export const handler = async (
     };
 
     console.log('Poster generated successfully', { requestId, posterId: poster.posterId });
-    return createResponse(201, response);
+    return createResponse(201, response, corsOrigin);
   } catch (error) {
     console.error('Poster generation failed', { requestId, error });
 
@@ -355,9 +382,9 @@ export const handler = async (
       console.warn('Cleaning up orphaned S3 objects after DB failure', { requestId, keys: s3Keys });
       try {
         await Promise.all([
-          deleteFromS3(s3Keys.imageKey),
-          deleteFromS3(s3Keys.thumbnailKey),
-          deleteFromS3(s3Keys.uploadKey),
+          deleteFromS3(s3Keys.imageKey, { requestId }),
+          deleteFromS3(s3Keys.thumbnailKey, { requestId }),
+          deleteFromS3(s3Keys.uploadKey, { requestId }),
         ]);
       } catch (cleanupError) {
         // Log but continue - S3 lifecycle rules can handle orphaned objects
@@ -367,25 +394,25 @@ export const handler = async (
 
     // Return appropriate error based on failure type using typed errors
     if (error instanceof TemplateNotFoundError) {
-      return createErrorResponse(404, 'Template not found', 'TEMPLATE_NOT_FOUND');
+      return createErrorResponse(404, 'Template not found', 'TEMPLATE_NOT_FOUND', corsOrigin);
     }
     if (error instanceof FontLoadError) {
-      return createErrorResponse(500, 'Failed to initialize fonts', 'FONT_INIT_FAILED');
+      return createErrorResponse(500, 'Failed to initialize fonts', 'FONT_INIT_FAILED', corsOrigin);
     }
     if (error instanceof ExternalServiceError) {
-      return createErrorResponse(500, 'Failed to upload poster', 'STORAGE_ERROR');
+      return createErrorResponse(500, 'Failed to upload poster', 'STORAGE_ERROR', corsOrigin);
     }
 
     // Fallback for untyped errors (legacy compatibility)
     if (error instanceof Error) {
       if (error.message.includes('S3') || error.message.includes('upload')) {
-        return createErrorResponse(500, 'Failed to upload poster', 'STORAGE_ERROR');
+        return createErrorResponse(500, 'Failed to upload poster', 'STORAGE_ERROR', corsOrigin);
       }
       if (error.message.includes('DynamoDB') || error.message.includes('database')) {
-        return createErrorResponse(500, 'Failed to save poster', 'DATABASE_ERROR');
+        return createErrorResponse(500, 'Failed to save poster', 'DATABASE_ERROR', corsOrigin);
       }
     }
 
-    return createErrorResponse(500, 'Failed to generate poster', 'GENERATION_FAILED');
+    return createErrorResponse(500, 'Failed to generate poster', 'GENERATION_FAILED', corsOrigin);
   }
 };
