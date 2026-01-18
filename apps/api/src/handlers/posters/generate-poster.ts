@@ -48,10 +48,11 @@ const POSTER_QUALITY = 90;
 // Must match MAX_FILE_SIZE in multipart.ts for consistent enforcement
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
-// Promise-based lock for font initialization to prevent concurrent init calls
-// fontInitFailed tracks if previous init failed, allowing retry on next request
+// Promise-based lock for font initialization to prevent concurrent init calls.
+// On failure, the promise is reset to null allowing retry on subsequent requests.
+// Concurrent requests waiting on a failing promise will all get the error, but
+// the next request will trigger a fresh initialization attempt.
 let fontInitPromise: Promise<InitBundledFontsResult> | null = null;
-let fontInitFailed = false;
 
 // Get allowed origins from environment or use restrictive default
 const ALLOWED_ORIGIN = process.env.CORS_ALLOWED_ORIGIN || 'https://bjj-poster.com';
@@ -103,12 +104,22 @@ function createErrorResponse(
 }
 
 /**
- * Validate image format using sharp metadata (not just MIME type header)
+ * Validate image format using sharp metadata (not just MIME type header).
+ *
+ * Supported formats:
+ * - jpeg: Standard JPEG images
+ * - png: PNG images with transparency support
+ * - heif: HEIC/HEIF images (common on iOS devices) - sharp reads these via libvips
+ *
+ * Note: HEIF format is returned by sharp for HEIC files. The final poster is always
+ * output as JPEG regardless of input format. Original uploads are stored in their
+ * native format.
  */
 async function validateImageFormat(buffer: Buffer): Promise<{ valid: boolean; format?: string; error?: string }> {
   try {
     const metadata = await sharp(buffer).metadata();
-    const allowedFormats = ['jpeg', 'png'];
+    // 'heif' is what sharp reports for HEIC files
+    const allowedFormats = ['jpeg', 'png', 'heif'];
 
     if (!metadata.format || !allowedFormats.includes(metadata.format)) {
       return { valid: false, error: `Invalid image format: ${metadata.format || 'unknown'}` };
@@ -139,11 +150,12 @@ export const handler = async (
     };
   }
 
-  // 1. Extract userId from JWT
-  const userId = event.requestContext.authorizer?.claims?.sub as string | undefined;
-  if (!userId) {
+  // 1. Extract userId from JWT - use typeof check for type narrowing instead of cast
+  const userId = event.requestContext.authorizer?.claims?.sub;
+  if (typeof userId !== 'string') {
     return createErrorResponse(401, 'Authentication required', 'UNAUTHORIZED');
   }
+  // userId is now typed as string after the type guard
 
   // 2. Parse multipart form data
   if (!event.body) {
@@ -227,26 +239,16 @@ export const handler = async (
   let s3Keys: { imageKey: string; thumbnailKey: string; uploadKey: string } | null = null;
 
   try {
-    // 8. Initialize fonts once (cold start) using Promise lock for thread safety
-    // fontInitFailed allows retry on subsequent requests if previous init failed
-    if (!fontInitPromise && !fontInitFailed) {
-      fontInitPromise = initBundledFonts();
+    // 8. Initialize fonts once (cold start) using Promise lock for thread safety.
+    // The catch handler resets fontInitPromise on failure, allowing retry on next request.
+    // Concurrent requests waiting on the same failing promise will all get the error.
+    if (!fontInitPromise) {
+      fontInitPromise = initBundledFonts().catch((error: unknown) => {
+        fontInitPromise = null; // Reset on failure to allow retry
+        throw error;
+      });
     }
-    if (fontInitFailed) {
-      // Retry initialization on new request after previous failure
-      console.warn('Retrying font initialization after previous failure', { requestId });
-      fontInitPromise = initBundledFonts();
-      fontInitFailed = false;
-    }
-    try {
-      await fontInitPromise;
-    } catch (fontError) {
-      // Mark as failed so next request can retry, but don't null the promise
-      // to avoid race conditions with concurrent requests
-      fontInitFailed = true;
-      fontInitPromise = null;
-      throw fontError;
-    }
+    await fontInitPromise;
 
     // 9. Sanitize text inputs to prevent XSS in rendered output
     const sanitizedData = {
@@ -277,7 +279,7 @@ export const handler = async (
 
     // 12. Generate poster ID and S3 keys BEFORE any writes
     const posterId = `pstr_${nanoid(12)}`;
-    const uploadFormat = imageValidation.format as 'jpeg' | 'png';
+    const uploadFormat = imageValidation.format as 'jpeg' | 'png' | 'heif';
     const keys = generatePosterKeys(userId, posterId, uploadFormat);
     s3Keys = keys; // Track for cleanup on failure
 

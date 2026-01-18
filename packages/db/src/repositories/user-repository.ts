@@ -15,11 +15,26 @@ import type {
   UpdateSubscriptionInput,
 } from '../entities/user.js';
 
-const TIER_LIMITS: Record<string, number> = {
+// Known subscription tiers and their monthly poster limits
+// -1 = unlimited
+type KnownTier = 'free' | 'pro' | 'premium';
+const TIER_LIMITS: Record<KnownTier, number> = {
   free: 2,
   pro: 20,
   premium: -1, // Unlimited
 };
+
+/**
+ * Get the poster limit for a tier, defaulting to free tier for unknown tiers.
+ * Logs a warning for unknown tiers to help identify data issues.
+ */
+function getTierLimit(tier: string): number {
+  if (tier in TIER_LIMITS) {
+    return TIER_LIMITS[tier as KnownTier];
+  }
+  console.warn('Unknown subscription tier, defaulting to free tier limit', { tier });
+  return TIER_LIMITS.free;
+}
 
 export interface UsageCheckResult {
   allowed: boolean;
@@ -181,7 +196,7 @@ export class UserRepository {
     const user = await this.getById(userId);
     const now = new Date();
     const tier = user?.subscriptionTier || 'free';
-    const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
+    const limit = getTierLimit(tier);
     const newResetsAt = this.getNextResetDate();
     const existingResetsAt = user?.usageResetAt || newResetsAt;
 
@@ -358,7 +373,15 @@ export class UserRepository {
   }
 
   /**
-   * Decrement usage count (for rollback on failed operations)
+   * Decrement usage count (for rollback on failed operations).
+   *
+   * Note: This operation does not validate tier. Edge case: if a premium user
+   * (with high postersThisMonth, e.g., 100) is downgraded to free tier, the
+   * decrement will still succeed even though the count is above the free limit.
+   * This is acceptable because:
+   * 1. Rollback is a best-effort operation for failed poster generation
+   * 2. The user cannot CREATE new posters above their limit (enforced by checkAndIncrementUsage)
+   * 3. Usage count will reset at month boundary regardless
    */
   async decrementUsage(userId: string): Promise<void> {
     await this.client.send(
@@ -382,7 +405,7 @@ export class UserRepository {
   async getUsage(userId: string): Promise<UsageCheckResult> {
     const user = await this.getById(userId);
     const tier = user?.subscriptionTier || 'free';
-    const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
+    const limit = getTierLimit(tier);
     const now = new Date();
     const resetsAt = user?.usageResetAt || this.getNextResetDate();
     const needsReset = !user?.usageResetAt || new Date(user.usageResetAt) <= now;

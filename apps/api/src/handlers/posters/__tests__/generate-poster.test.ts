@@ -109,7 +109,7 @@ vi.mock('sharp', () => ({
 
 import { handler } from '../generate-poster.js';
 import { db } from '@bjj-poster/db';
-import { parseMultipart } from '../../../lib/multipart.js';
+import { parseMultipart, parseMultipartBase64 } from '../../../lib/multipart.js';
 import { uploadMultipleToS3, deleteFromS3 } from '../../../lib/s3.js';
 import sharp from 'sharp';
 
@@ -117,6 +117,7 @@ const mockCheckAndIncrementUsage = vi.mocked(db.users.checkAndIncrementUsage);
 const mockDecrementUsage = vi.mocked(db.users.decrementUsage);
 const mockPostersCreate = vi.mocked(db.posters.create);
 const mockParseMultipart = vi.mocked(parseMultipart);
+const mockParseMultipartBase64 = vi.mocked(parseMultipartBase64);
 const mockUploadMultipleToS3 = vi.mocked(uploadMultipleToS3);
 const mockDeleteFromS3 = vi.mocked(deleteFromS3);
 const mockSharp = vi.mocked(sharp);
@@ -403,5 +404,37 @@ describe('generatePoster handler', () => {
     expect(result.statusCode).toBe(400);
     const body = JSON.parse(result.body);
     expect(body.code).toBe('INVALID_MULTIPART');
+  });
+
+  it('handles base64-encoded multipart body from API Gateway', async () => {
+    // API Gateway sends base64-encoded body for binary data
+    mockParseMultipartBase64.mockResolvedValueOnce({
+      fields: {
+        templateId: 'classic',
+        athleteName: 'João Silva',
+        beltRank: 'blue',
+        tournamentName: 'World Championship',
+        tournamentDate: 'June 2025',
+      },
+      file: {
+        fieldname: 'photo',
+        filename: 'test.jpg',
+        encoding: '7bit',
+        mimeType: 'image/jpeg',
+        buffer: Buffer.from('fake-image-data'),
+      },
+    });
+
+    const event = createEvent({
+      isBase64Encoded: true,
+      body: Buffer.from('fake-multipart-body').toString('base64'),
+    });
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(201);
+    expect(mockParseMultipartBase64).toHaveBeenCalled();
+    expect(mockParseMultipart).not.toHaveBeenCalled();
+    const body = JSON.parse(result.body);
+    expect(body.poster).toBeDefined();
   });
 });
