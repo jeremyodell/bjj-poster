@@ -8,6 +8,7 @@
  */
 
 import type { APIGatewayProxyHandler, APIGatewayProxyResult } from 'aws-lambda';
+import { createRequestLogger } from '@bjj-poster/core';
 import { db } from '@bjj-poster/db';
 import type { GetProfileResponse } from './types.js';
 
@@ -27,17 +28,18 @@ function createResponse(
 
 export const handler: APIGatewayProxyHandler = async (event) => {
   const requestId = event.requestContext.requestId;
+  const log = createRequestLogger(requestId);
 
   // Extract userId from auth context
-  const userId = event.requestContext.authorizer?.claims?.sub;
-  const email = event.requestContext.authorizer?.claims?.email;
+  const userId = event.requestContext.authorizer?.claims?.sub as string | undefined;
+  const email = event.requestContext.authorizer?.claims?.email as string | undefined;
 
   if (!userId) {
-    console.log('Unauthorized request', { requestId });
+    log.info('Unauthorized request - missing userId');
     return createResponse(401, { message: 'Unauthorized' });
   }
 
-  console.log('GetProfile handler invoked', { requestId, userId });
+  log.info('GetProfile handler invoked', { userId });
 
   try {
     // Fetch user and usage in parallel
@@ -48,15 +50,21 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
     // Fire-and-forget: update lastActiveAt for existing users
     if (user) {
-      db.users.updateLastActiveAt(userId).catch((err) => {
-        console.warn('Failed to update lastActiveAt', { requestId, userId, error: err });
+      db.users.updateLastActiveAt(userId).catch((err: unknown) => {
+        log.warn('Failed to update lastActiveAt', { userId, error: err });
       });
+    }
+
+    // Determine email with fallback, warn if missing
+    const userEmail = user?.email || email || '';
+    if (!userEmail) {
+      log.warn('User profile has no email', { userId });
     }
 
     const response: GetProfileResponse = {
       user: {
         id: userId,
-        email: user?.email || email || '',
+        email: userEmail,
         name: user?.name,
       },
       subscription: {
@@ -70,11 +78,11 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       },
     };
 
-    console.log('Profile retrieved', { requestId, userId, tier: response.subscription.tier });
+    log.info('Profile retrieved', { userId, tier: response.subscription.tier });
 
     return createResponse(200, response);
   } catch (error) {
-    console.error('GetProfile handler failed', { requestId, userId, error });
+    log.error('GetProfile handler failed', { userId, error });
     return createResponse(500, { message: 'Failed to retrieve profile' });
   }
 };

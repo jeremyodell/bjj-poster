@@ -124,8 +124,9 @@ describe('getProfile handler (integration)', () => {
           TableName: TABLE_NAME,
         })
       );
-    } catch {
-      // Ignore cleanup errors
+    } catch (error) {
+      // Log cleanup errors to help debug test environment issues
+      console.error('Test cleanup failed:', error);
     }
   });
 
@@ -156,32 +157,38 @@ describe('getProfile handler (integration)', () => {
       })
     );
     const beforeLastActive = beforeResult.Item?.lastActiveAt;
+    const beforeTimestamp = beforeLastActive ? new Date(beforeLastActive).getTime() : 0;
 
     // Small delay to ensure timestamp differs
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Call handler
     const event = createEvent('user-profile-test');
     await handler(event, mockContext, () => {});
 
-    // Give fire-and-forget time to complete
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    // Poll for lastActiveAt update with timeout (more reliable than fixed delay)
+    const maxAttempts = 10;
+    const pollInterval = 100;
+    let lastActiveAt: string | undefined;
 
-    // Get user after
-    const afterResult = await docClient.send(
-      new GetCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: 'USER#user-profile-test', SK: 'PROFILE' },
-      })
-    );
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
-    expect(afterResult.Item?.lastActiveAt).toBeDefined();
-
-    if (beforeLastActive) {
-      expect(new Date(afterResult.Item!.lastActiveAt).getTime()).toBeGreaterThan(
-        new Date(beforeLastActive).getTime()
+      const result = await docClient.send(
+        new GetCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: 'USER#user-profile-test', SK: 'PROFILE' },
+        })
       );
+
+      lastActiveAt = result.Item?.lastActiveAt;
+      if (lastActiveAt && new Date(lastActiveAt).getTime() > beforeTimestamp) {
+        break;
+      }
     }
+
+    expect(lastActiveAt).toBeDefined();
+    expect(new Date(lastActiveAt!).getTime()).toBeGreaterThan(beforeTimestamp);
   });
 
   it('returns default free tier for non-existent user', async () => {
