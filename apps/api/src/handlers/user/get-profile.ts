@@ -5,6 +5,11 @@
  *
  * Returns authenticated user's profile data including subscription
  * tier and quota information.
+ *
+ * Security: This handler requires a valid Cognito JWT token. The API Gateway
+ * Cognito authorizer validates the token before invoking this handler. The
+ * authorizer populates event.requestContext.authorizer.claims with decoded
+ * JWT claims including 'sub' (userId) and 'email'.
  */
 
 import type { APIGatewayProxyHandler, APIGatewayProxyResult } from 'aws-lambda';
@@ -12,6 +17,12 @@ import { createRequestLogger } from '@bjj-poster/core';
 import { db } from '@bjj-poster/db';
 import type { GetProfileResponse } from './types.js';
 
+/**
+ * Creates a standardized API Gateway response with CORS headers.
+ * @param statusCode - HTTP status code
+ * @param body - Response body to be JSON stringified
+ * @returns API Gateway proxy result with Content-Type and CORS headers
+ */
 function createResponse(
   statusCode: number,
   body: unknown
@@ -30,14 +41,22 @@ export const handler: APIGatewayProxyHandler = async (event) => {
   const requestId = event.requestContext.requestId;
   const log = createRequestLogger(requestId);
 
-  // Extract userId from auth context
-  const userId = event.requestContext.authorizer?.claims?.sub as string | undefined;
-  const email = event.requestContext.authorizer?.claims?.email as string | undefined;
+  // Extract and validate userId from auth context.
+  // The API Gateway Cognito authorizer validates the JWT and populates claims.
+  // We perform runtime type checking as defense-in-depth since claims are typed as 'any'.
+  const userIdClaim = event.requestContext.authorizer?.claims?.sub;
+  const emailClaim = event.requestContext.authorizer?.claims?.email;
 
-  if (!userId) {
-    log.info('Unauthorized request - missing userId');
+  if (!userIdClaim || typeof userIdClaim !== 'string') {
+    log.info('Unauthorized request - missing or invalid userId', {
+      hasUserId: !!userIdClaim,
+      userIdType: typeof userIdClaim,
+    });
     return createResponse(401, { message: 'Unauthorized' });
   }
+
+  const userId = userIdClaim;
+  const email = typeof emailClaim === 'string' ? emailClaim : undefined;
 
   log.info('GetProfile handler invoked', { userId });
 
@@ -55,7 +74,11 @@ export const handler: APIGatewayProxyHandler = async (event) => {
       });
     }
 
-    // Determine email with fallback, warn if missing
+    // Determine email with fallback. Empty email is acceptable because:
+    // 1. New users (first login) may not have a DB record yet
+    // 2. The JWT claim may be missing if Cognito is configured without email
+    // 3. The frontend should gracefully handle empty email (show "Not set")
+    // We log a warning to help identify data quality issues.
     const userEmail = user?.email || email || '';
     if (!userEmail) {
       log.warn('User profile has no email', { userId });

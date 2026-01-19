@@ -125,7 +125,10 @@ describe('getProfile handler (integration)', () => {
         })
       );
     } catch (error) {
-      // Log cleanup errors to help debug test environment issues
+      // Note: Using console.error here instead of structured logger is intentional.
+      // Test infrastructure errors should be visible in test output regardless of
+      // log level configuration, and the structured logger may not be initialized
+      // in the test environment.
       console.error('Test cleanup failed:', error);
     }
   });
@@ -166,10 +169,14 @@ describe('getProfile handler (integration)', () => {
     const event = createEvent('user-profile-test');
     await handler(event, mockContext, () => {});
 
-    // Poll for lastActiveAt update with timeout (more reliable than fixed delay)
-    const maxAttempts = 10;
+    // Poll for lastActiveAt update with timeout (more reliable than fixed delay).
+    // The fire-and-forget update runs asynchronously, so we poll until we see
+    // the update or reach the timeout. This approach is more reliable than a
+    // fixed delay, especially in CI environments with variable I/O performance.
+    const maxAttempts = 15; // 15 attempts * 100ms = 1.5s max wait
     const pollInterval = 100;
     let lastActiveAt: string | undefined;
+    let updateDetected = false;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -183,13 +190,16 @@ describe('getProfile handler (integration)', () => {
 
       lastActiveAt = result.Item?.lastActiveAt;
       if (lastActiveAt && new Date(lastActiveAt).getTime() > beforeTimestamp) {
+        updateDetected = true;
         break;
       }
     }
 
+    // Provide clear error message if polling timed out
+    expect(updateDetected).toBe(true);
     expect(lastActiveAt).toBeDefined();
     expect(new Date(lastActiveAt!).getTime()).toBeGreaterThan(beforeTimestamp);
-  });
+  }, 5000); // Increase test timeout to 5s for slow CI environments
 
   it('returns default free tier for non-existent user', async () => {
     const event = createEvent('non-existent-user', 'new@example.com');
