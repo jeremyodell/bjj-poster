@@ -35,6 +35,7 @@ function createResponse(
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'public, max-age=300',
     },
     body: JSON.stringify(body),
   };
@@ -64,6 +65,9 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
     // Delegate to repository - no DB logic here!
     const templates = await db.templates.list(category);
+
+    // Sort by category alphabetically
+    templates.sort((a, b) => a.category.localeCompare(b.category));
 
     console.log('Templates retrieved', {
       requestId,
