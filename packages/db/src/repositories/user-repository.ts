@@ -48,6 +48,19 @@ export class UserRepository {
   constructor(private readonly client: DynamoDBDocumentClient) {}
 
   /**
+   * Build a DynamoDB condition expression to validate the user's tier hasn't changed.
+   * This prevents TOCTOU race conditions during atomic operations.
+   *
+   * For the 'free' tier, we also need to handle new users who don't have a
+   * subscriptionTier attribute yet (they default to free).
+   */
+  private getTierConditionExpression(expectedTier: string): string {
+    return expectedTier === 'free'
+      ? '(attribute_not_exists(subscriptionTier) OR subscriptionTier = :expectedTier)'
+      : 'subscriptionTier = :expectedTier';
+  }
+
+  /**
    * Get a user by ID
    */
   async getById(userId: string): Promise<User | null> {
@@ -257,10 +270,7 @@ export class UserRepository {
     existingResetsAt: string
   ): Promise<{ newCount: number; resetsAt: string }> {
     const now = new Date().toISOString();
-
-    // Condition to validate tier hasn't changed (premium -> free would be a problem)
-    // For new users, subscriptionTier won't exist so we check for that too
-    const tierCondition = 'subscriptionTier = :expectedTier';
+    const tierCondition = this.getTierConditionExpression(expectedTier);
 
     if (needsReset) {
       // Reset counter to 1 for new period
@@ -319,12 +329,7 @@ export class UserRepository {
     existingResetsAt: string
   ): Promise<{ newCount: number; resetsAt: string }> {
     const now = new Date().toISOString();
-
-    // Tier validation: for new users (no tier set), they default to 'free'
-    // We check both: tier matches expected OR tier doesn't exist and expected is 'free'
-    const tierCondition = expectedTier === 'free'
-      ? '(attribute_not_exists(subscriptionTier) OR subscriptionTier = :expectedTier)'
-      : 'subscriptionTier = :expectedTier';
+    const tierCondition = this.getTierConditionExpression(expectedTier);
 
     if (needsReset) {
       // Reset counter to 1 for new period (always allowed since limit >= 1)

@@ -30,16 +30,17 @@ import { uploadMultipleToS3, generatePosterKeys, deleteFromS3 } from '../../lib/
 import { generatePosterSchema } from './types.js';
 import type { GeneratePosterResponse, QuotaExceededResponse } from './types.js';
 
-// Thumbnail dimensions: 400x560 maintains 5:7 aspect ratio
-// This matches the standard BJJ tournament poster template dimensions.
-// All templates currently use 5:7 ratio (portrait orientation optimal for mobile).
+// Poster aspect ratio: 5:7 (portrait orientation optimal for mobile)
+// All templates currently use this ratio. The thumbnail dimensions are derived
+// from this ratio to ensure consistent aspect ratio across all sizes.
 //
 // TODO(ODE-XXX): When adding templates with different aspect ratios, move these
 // dimensions to template metadata. Each template should define its own thumbnail
 // dimensions to preserve correct aspect ratio. Example template metadata structure:
 //   { id: 'landscape-1', dimensions: { width: 1920, height: 1080 }, thumbnail: { width: 560, height: 315 } }
+const POSTER_ASPECT_RATIO = 5 / 7;
 const THUMBNAIL_WIDTH = 400;
-const THUMBNAIL_HEIGHT = 560;
+const THUMBNAIL_HEIGHT = Math.round(THUMBNAIL_WIDTH / POSTER_ASPECT_RATIO); // 560
 
 // JPEG quality settings (1-100 scale)
 // - THUMBNAIL_QUALITY: 80 balances ~50KB file size with acceptable visual quality for previews
@@ -404,6 +405,12 @@ export const handler = async (
     }
 
     // Fallback for untyped errors (legacy compatibility)
+    // Note: String matching on error messages is fragile but necessary for:
+    // 1. AWS SDK errors that don't use our typed error classes
+    // 2. Third-party library errors (sharp, etc.) with varying message formats
+    // 3. Backward compatibility with existing error handling patterns
+    // Prefer using typed errors (TemplateNotFoundError, etc.) where possible.
+    // Monitor logs for unexpected error patterns that should be converted to typed errors.
     if (error instanceof Error) {
       if (error.message.includes('S3') || error.message.includes('upload')) {
         return createErrorResponse(500, 'Failed to upload poster', 'STORAGE_ERROR', corsOrigin);
