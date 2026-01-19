@@ -20,6 +20,22 @@ export class StorageStack extends cdk.Stack {
           id: 'DeleteOldVersions',
           enabled: true,
           noncurrentVersionExpiration: cdk.Duration.days(30)
+        },
+        {
+          // Clean up orphaned uploads after 7 days
+          // Uploads are temporary files that should be processed immediately
+          // If they still exist after 7 days, they are likely orphaned
+          id: 'CleanupOrphanedUploads',
+          enabled: true,
+          prefix: 'uploads/',
+          expiration: cdk.Duration.days(7)
+        },
+        {
+          // Clean up incomplete multipart uploads after 1 day
+          // These can accumulate if upload requests are interrupted
+          id: 'AbortIncompleteMultipartUploads',
+          enabled: true,
+          abortIncompleteMultipartUploadAfter: cdk.Duration.days(1)
         }
       ],
       removalPolicy: config.stage === 'dev'

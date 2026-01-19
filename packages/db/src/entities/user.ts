@@ -16,6 +16,8 @@ export interface User {
   stripeSubscriptionId?: string;
   createdAt: string;
   updatedAt: string;
+  postersThisMonth?: number;
+  usageResetAt?: string;
 }
 
 /**
@@ -33,6 +35,8 @@ export interface UserItem {
   stripeSubscriptionId?: string;
   createdAt: string;
   updatedAt: string;
+  postersThisMonth?: number;
+  usageResetAt?: string;
 }
 
 export interface UpdateSubscriptionInput {
