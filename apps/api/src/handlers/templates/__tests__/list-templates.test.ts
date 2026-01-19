@@ -78,4 +78,34 @@ describe('listTemplates handler', () => {
     expect(body.templates[0]).toHaveProperty('category');
     expect(body.templates[0]).toHaveProperty('thumbnailUrl');
   });
+
+  it('filters templates by category when provided', async () => {
+    const tournamentTemplates = mockTemplates.filter(t => t.category === 'tournament');
+    vi.mocked(db.templates.list).mockResolvedValue(tournamentTemplates);
+
+    const event = createEvent({
+      queryStringParameters: { category: 'tournament' },
+    });
+    const result = await handler(event, mockContext, () => {});
+
+    expect(result!.statusCode).toBe(200);
+    expect(db.templates.list).toHaveBeenCalledWith('tournament');
+
+    const body = JSON.parse(result!.body);
+    expect(body.templates).toHaveLength(1);
+    expect(body.templates[0].category).toBe('tournament');
+  });
+
+  it('returns 400 for invalid category', async () => {
+    const event = createEvent({
+      queryStringParameters: { category: 'invalid-category' },
+    });
+    const result = await handler(event, mockContext, () => {});
+
+    expect(result!.statusCode).toBe(400);
+
+    const body = JSON.parse(result!.body);
+    expect(body.message).toContain('Invalid category');
+    expect(db.templates.list).not.toHaveBeenCalled();
+  });
 });
