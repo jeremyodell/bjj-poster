@@ -7,11 +7,21 @@
 import { PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { TABLE_NAME } from '../config.js';
-import type { Poster, PosterItem, CreatePosterInput } from '../entities/poster.js';
+import type {
+  Poster,
+  PosterItem,
+  CreatePosterInput,
+  PaginatedPostersOptions,
+  PaginatedPostersResult,
+} from '../entities/poster.js';
 
 // Default limit for paginated poster queries
 // Balances data retrieval size with DynamoDB read capacity
 const DEFAULT_POSTER_QUERY_LIMIT = 50;
+
+// Pagination constants
+const DEFAULT_PAGINATED_LIMIT = 20;
+const MAX_PAGINATED_LIMIT = 50;
 
 export class PosterRepository {
   constructor(private readonly client: DynamoDBDocumentClient) {}
@@ -82,6 +92,75 @@ export class PosterRepository {
     );
 
     return (result.Items || []).map((item) => this.toEntity(item as PosterItem));
+  }
+
+  /**
+   * Get paginated posters for a user (newest first)
+   *
+   * Uses cursor-based pagination with Base64-encoded SK.
+   * Optionally filters by belt rank using DynamoDB FilterExpression.
+   */
+  async getByUserIdPaginated(
+    userId: string,
+    options: PaginatedPostersOptions = {}
+  ): Promise<PaginatedPostersResult> {
+    const limit = Math.min(
+      options.limit || DEFAULT_PAGINATED_LIMIT,
+      MAX_PAGINATED_LIMIT
+    );
+
+    // Build expression attribute values
+    const expressionValues: Record<string, string> = {
+      ':pk': `USER#${userId}`,
+      ':sk': 'POSTER#',
+    };
+
+    // Build optional filter expression for belt rank
+    let filterExpression: string | undefined;
+    if (options.beltRank) {
+      filterExpression = 'beltRank = :beltRank';
+      expressionValues[':beltRank'] = options.beltRank;
+    }
+
+    // Decode cursor to ExclusiveStartKey if provided
+    let exclusiveStartKey: Record<string, string> | undefined;
+    if (options.cursor) {
+      const decodedSK = Buffer.from(options.cursor, 'base64').toString('utf-8');
+      exclusiveStartKey = {
+        PK: `USER#${userId}`,
+        SK: decodedSK,
+      };
+    }
+
+    const result = await this.client.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+        ExpressionAttributeValues: expressionValues,
+        FilterExpression: filterExpression,
+        ExclusiveStartKey: exclusiveStartKey,
+        ScanIndexForward: false, // Newest first
+        Limit: limit + 1, // Fetch one extra to detect hasMore
+      })
+    );
+
+    const items = (result.Items || []) as PosterItem[];
+
+    // Check if there are more items
+    const hasMore = items.length > limit;
+    const returnItems = hasMore ? items.slice(0, limit) : items;
+
+    // Encode next cursor from last returned item
+    let nextCursor: string | null = null;
+    if (hasMore && returnItems.length > 0) {
+      const lastItem = returnItems[returnItems.length - 1];
+      nextCursor = Buffer.from(lastItem.SK).toString('base64');
+    }
+
+    return {
+      items: returnItems.map((item) => this.toEntity(item)),
+      nextCursor,
+    };
   }
 
   /**
