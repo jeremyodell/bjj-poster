@@ -5,5 +5,6 @@ export default defineConfig({
     setupFiles: ['./src/handlers/payments/__tests__/setup.ts'],
     globals: false,
     environment: 'node',
+    exclude: ['**/*.integration.test.ts', '**/node_modules/**'],
   },
 });
