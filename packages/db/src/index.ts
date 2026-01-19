@@ -37,6 +37,8 @@ export type {
   BeltRank,
   PosterStatus,
   CreatePosterInput,
+  PaginatedPostersOptions,
+  PaginatedPostersResult,
 } from './entities/poster.js';
 
 // Re-export repository classes (for testing/DI)
