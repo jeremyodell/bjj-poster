@@ -127,4 +127,15 @@ describe('listTemplates handler', () => {
     expect(body.templates[0].category).toBe('gym');
     expect(body.templates[1].category).toBe('tournament');
   });
+
+  it('includes Cache-Control header for 5-minute caching', async () => {
+    vi.mocked(db.templates.list).mockResolvedValue(mockTemplates);
+
+    const event = createEvent();
+    const result = await handler(event, mockContext, () => {});
+
+    expect(result!.statusCode).toBe(200);
+    expect(result!.headers).toBeDefined();
+    expect(result!.headers!['Cache-Control']).toBe('public, max-age=300');
+  });
 });
