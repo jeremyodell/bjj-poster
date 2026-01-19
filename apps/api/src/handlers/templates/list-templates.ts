@@ -65,6 +65,9 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     // Delegate to repository - no DB logic here!
     const templates = await db.templates.list(category);
 
+    // Sort by category alphabetically
+    templates.sort((a, b) => a.category.localeCompare(b.category));
+
     console.log('Templates retrieved', {
       requestId,
       count: templates.length,

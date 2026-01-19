@@ -108,4 +108,23 @@ describe('listTemplates handler', () => {
     expect(body.message).toContain('Invalid category');
     expect(db.templates.list).not.toHaveBeenCalled();
   });
+
+  it('returns templates sorted by category alphabetically', async () => {
+    // Return in reverse alphabetical order to verify sorting
+    const unsortedTemplates = [
+      { ...mockTemplates[0], category: 'tournament' as const },
+      { ...mockTemplates[1], category: 'gym' as const },
+    ];
+    vi.mocked(db.templates.list).mockResolvedValue(unsortedTemplates);
+
+    const event = createEvent();
+    const result = await handler(event, mockContext, () => {});
+
+    expect(result!.statusCode).toBe(200);
+
+    const body = JSON.parse(result!.body);
+    // 'gym' comes before 'tournament' alphabetically
+    expect(body.templates[0].category).toBe('gym');
+    expect(body.templates[1].category).toBe('tournament');
+  });
 });
