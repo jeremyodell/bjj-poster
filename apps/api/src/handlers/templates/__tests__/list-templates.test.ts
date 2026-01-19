@@ -138,4 +138,31 @@ describe('listTemplates handler', () => {
     expect(result!.headers).toBeDefined();
     expect(result!.headers!['Cache-Control']).toBe('public, max-age=300');
   });
+
+  it('returns empty array when no templates match', async () => {
+    vi.mocked(db.templates.list).mockResolvedValue([]);
+
+    const event = createEvent({
+      queryStringParameters: { category: 'social' },
+    });
+    const result = await handler(event, mockContext, () => {});
+
+    expect(result!.statusCode).toBe(200);
+
+    const body = JSON.parse(result!.body);
+    expect(body.templates).toEqual([]);
+    expect(body.count).toBe(0);
+  });
+
+  it('returns 500 when database fails', async () => {
+    vi.mocked(db.templates.list).mockRejectedValue(new Error('Database connection failed'));
+
+    const event = createEvent();
+    const result = await handler(event, mockContext, () => {});
+
+    expect(result!.statusCode).toBe(500);
+
+    const body = JSON.parse(result!.body);
+    expect(body.message).toBe('Failed to retrieve templates');
+  });
 });
