@@ -67,3 +67,14 @@ export interface CreatePosterInput {
   thumbnailKey: string;
   uploadKey: string;
 }
+
+export interface PaginatedPostersOptions {
+  limit?: number;
+  cursor?: string;
+  beltRank?: BeltRank;
+}
+
+export interface PaginatedPostersResult {
+  items: Poster[];
+  nextCursor: string | null;
+}

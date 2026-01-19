@@ -73,3 +73,44 @@ export interface QuotaExceededResponse {
     resetsAt: string;
   };
 }
+
+/**
+ * Poster item in list response
+ */
+export interface PosterListItem {
+  id: string;
+  templateId: string;
+  athleteName: string;
+  teamName?: string;
+  beltRank: string;
+  tournamentName: string;
+  tournamentDate: string;
+  tournamentLocation?: string;
+  achievement?: string;
+  status: string;
+  imageUrl: string;
+  thumbnailUrl: string;
+  createdAt: string;
+}
+
+/**
+ * GET /api/posters response
+ */
+export interface GetUserPostersResponse {
+  posters: PosterListItem[];
+  pagination: {
+    nextCursor: string | null;
+    hasMore: boolean;
+  };
+  count: number;
+}
+
+/**
+ * Valid belt ranks for filtering
+ */
+export const VALID_BELT_RANKS = ['white', 'blue', 'purple', 'brown', 'black'] as const;
+export type BeltRankFilter = (typeof VALID_BELT_RANKS)[number];
+
+export function isValidBeltRank(value: string): value is BeltRankFilter {
+  return VALID_BELT_RANKS.includes(value as BeltRankFilter);
+}
