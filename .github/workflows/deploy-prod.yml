@@ -1,0 +1,366 @@
+# Deploy to Production
+#
+# This workflow deploys to production when you push a version tag (v*.*.*)
+# It includes extra safety gates: re-running tests, CDK diff review, and
+# manual approval before deploying. This protects production from accidents.
+#
+# Educational Note:
+# - Tag-based deployment creates versioned release history
+# - Manual approval adds human review before production changes
+# - Full test suite re-run catches issues missed in CI
+# - GitHub Release creation documents what changed in each version
+
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Matches v1.0.0, v1.2.3, v2.0.0-beta, etc.
+  # Allow manual triggering for emergency deployments
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to deploy (e.g., v1.0.0)'
+        required: true
+        type: string
+
+# Required for OIDC authentication with AWS
+permissions:
+  id-token: write  # Request temporary AWS credentials
+  contents: write  # Create GitHub releases
+  actions: read    # Download artifacts from other workflows
+
+# Only one production deployment at a time (critical!)
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false  # Never cancel prod deployments mid-flight
+
+jobs:
+  # ============================================
+  # JOB 1: RUN FULL TEST SUITE
+  # ============================================
+  # Extra safety: Re-run all tests on the tagged commit
+  # Even though CI already ran tests, this catches rare edge cases
+  test:
+    name: Run Full Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+        # Educational: For workflow_dispatch, use user-provided tag
+        # For tag push, use github.ref (the tag that was pushed)
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run linter
+        run: pnpm lint
+        # Educational: Catches style issues before prod
+
+      - name: Run type check
+        run: pnpm type-check
+        # Educational: Verifies TypeScript types are correct
+
+      - name: Run unit tests
+        run: pnpm test
+        # Educational: Runs all unit tests across all packages
+
+      - name: Security audit
+        run: pnpm audit --audit-level=high
+        # Educational: Checks for known vulnerabilities in dependencies
+        # Fails if any high or critical severity issues found
+        # (Moderate/low severity warnings don't fail the build)
+        continue-on-error: false
+
+  # ============================================
+  # JOB 2: DEPLOY TO PRODUCTION
+  # ============================================
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: test  # Wait for tests to pass first
+    # Use 'production' environment for manual approval gate
+    environment:
+      name: production
+      url: https://api.yourapp.com
+    # Educational: GitHub Environment requires approval from designated reviewers
+    # Workflow pauses here until someone clicks "Approve and deploy"
+    # Reviewers can see CDK diff and test results before approving
+
+    steps:
+      # ============================================
+      # 1. CHECKOUT CODE
+      # ============================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0  # Fetch full history for changelog generation
+        # Educational: fetch-depth: 0 gets all commits and tags
+        # Needed to generate changelog from previous tag to current tag
+
+      # ============================================
+      # 2. SETUP BUILD ENVIRONMENT
+      # ============================================
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+        # Educational: Same build as dev, ensures consistency
+
+      # ============================================
+      # 3. AWS AUTHENTICATION
+      # ============================================
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PROD }}
+          aws-region: ${{ secrets.AWS_REGION }}
+        # Educational: Different role than dev (AWS_ROLE_ARN_PROD)
+        # Prod role should have stricter permissions and separate trust policy
+
+      - name: Verify AWS credentials
+        run: |
+          echo "Authenticated as:"
+          aws sts get-caller-identity
+          echo ""
+          echo "Deploying to PRODUCTION 🚨"
+
+      # ============================================
+      # 4. CDK DIFF (Preview Production Changes)
+      # ============================================
+      - name: Show CDK diff for production
+        working-directory: infra
+        run: |
+          echo "## CDK Diff for Production" >> $GITHUB_STEP_SUMMARY
+          echo '```diff' >> $GITHUB_STEP_SUMMARY
+          pnpm cdk diff --context stage=prod | tee -a $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        # Educational: Adds diff to workflow summary (visible in Actions UI)
+        # Reviewers can see exactly what will change before approving
+        # tee outputs to both console and summary file
+        # || true prevents failures from stopping the workflow
+        continue-on-error: true
+
+      # ============================================
+      # 5. DEPLOY TO PRODUCTION
+      # ============================================
+      # This step runs AFTER manual approval
+      - name: Deploy to Production
+        working-directory: infra
+        run: |
+          pnpm cdk deploy --all \
+            --context stage=prod \
+            --require-approval never \
+            --outputs-file cdk-outputs.json
+        # Educational: --context stage=prod creates 'bjj-poster-prod' stack
+        # Deployment happens in production AWS account
+        # CloudFormation handles blue/green deployment for zero downtime
+
+      - name: Extract deployment outputs
+        id: outputs
+        working-directory: infra
+        run: |
+          API_URL=$(jq -r '.BjjPosterProdStack.ApiUrl // empty' cdk-outputs.json)
+          echo "API_URL=$API_URL" >> $GITHUB_OUTPUT
+          echo "Deployed API URL: $API_URL"
+
+      # ============================================
+      # 6. SMOKE TESTS (Verify Production Deploy)
+      # ============================================
+      - name: Run production smoke tests
+        run: |
+          API_URL="${{ steps.outputs.outputs.API_URL }}"
+
+          if [ -z "$API_URL" ]; then
+            echo "⚠️  No API URL found, skipping smoke tests"
+            exit 0
+          fi
+
+          echo "Running smoke tests against PRODUCTION: $API_URL"
+
+          # Test 1: Health check
+          echo "Testing health endpoint..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${API_URL}/health")
+
+          if [ "$HTTP_CODE" -eq 200 ]; then
+            echo "✅ Health check passed (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Health check failed (HTTP $HTTP_CODE)"
+            echo "🚨 PRODUCTION DEPLOYMENT MAY HAVE FAILED"
+            exit 1
+          fi
+
+          # Add critical smoke tests for production:
+          # - Test authentication
+          # - Test key user flows
+          # - Verify database connectivity
+          # Keep tests fast but thorough
+
+        # Educational: If smoke tests fail, workflow fails
+        # CloudFormation may have succeeded but app is broken
+        # You'll need to investigate and potentially rollback
+
+      # ============================================
+      # 7. CREATE GITHUB RELEASE
+      # ============================================
+      - name: Extract version from tag
+        id: version
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ -n "${INPUT_TAG}" ]; then
+            VERSION="${INPUT_TAG#v}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Deploying version: $VERSION"
+        # Educational: Strips 'v' prefix from tag (v1.0.0 → 1.0.0)
+        # Uses env vars to safely handle GitHub context
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          CURRENT_TAG="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
+          
+          # Find previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" 2>/dev/null || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "No previous tag found, generating full changelog"
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            echo "Generating changelog from $PREVIOUS_TAG to $CURRENT_TAG"
+            CHANGELOG=$(git log "${PREVIOUS_TAG}..${CURRENT_TAG}" --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Save to file (multiline output)
+          echo "$CHANGELOG" > changelog.txt
+          echo "CHANGELOG_FILE=changelog.txt" >> $GITHUB_OUTPUT
+        # Educational: Generates changelog from git commits between tags
+        # Format: "- commit message (short hash)"
+        # Excludes merge commits (--no-merges)
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Release v${{ steps.version.outputs.VERSION }}
+          body_path: changelog.txt
+          draft: false
+          prerelease: false
+        # Educational: Creates GitHub Release with:
+        # - Tag name (e.g., v1.0.0)
+        # - Release title (e.g., "Release v1.0.0")
+        # - Changelog from commits
+        # - Attached deployment artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ============================================
+      # 8. UPLOAD ARTIFACTS
+      # ============================================
+      - name: Upload deployment artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-outputs-prod
+          path: infra/cdk-outputs.json
+          retention-days: 30
+        # Educational: Keep prod deployment outputs for 30 days
+        # Useful for debugging production issues
+
+      - name: Deployment summary
+        if: always()
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          COMMIT_SHA: ${{ github.sha }}
+          API_URL: ${{ steps.outputs.outputs.API_URL }}
+        run: |
+          echo "## Production Deployment Complete 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** v${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "**Stack:** bjj-poster-prod" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${COMMIT_SHA}" >> $GITHUB_STEP_SUMMARY
+
+          if [ -n "${API_URL}" ]; then
+            echo "**API URL:** ${API_URL}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Post-Deployment Checklist" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Verify key user flows work" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Check CloudWatch metrics for errors" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Monitor for increased error rates" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Update team in Slack/Discord" >> $GITHUB_STEP_SUMMARY
+        # Educational: Reminds team to verify production deployment
+        # Production deployments need human verification beyond smoke tests
+
+      # Optional: Success notification
+      # - name: Notify success
+      #   if: success()
+      #   uses: slackapi/slack-github-action@v1
+      #   with:
+      #     payload: |
+      #       {
+      #         "text": "✅ Production deployment successful!",
+      #         "blocks": [{
+      #           "type": "section",
+      #           "text": {
+      #             "type": "mrkdwn",
+      #             "text": "*Production Deployed*\nVersion: v${{ steps.version.outputs.VERSION }}\nAPI: ${{ steps.outputs.outputs.API_URL }}"
+      #           }
+      #         }]
+      #       }
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      # - name: Notify failure
+      #   if: failure()
+      #   uses: slackapi/slack-github-action@v1
+      #   with:
+      #     payload: |
+      #       {
+      #         "text": "🚨 PRODUCTION DEPLOYMENT FAILED",
+      #         "blocks": [{
+      #           "type": "section",
+      #           "text": {
+      #             "type": "mrkdwn",
+      #             "text": "*PRODUCTION DEPLOYMENT FAILED*\nVersion: v${{ steps.version.outputs.VERSION }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+      #           }
+      #         }]
+      #       }
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

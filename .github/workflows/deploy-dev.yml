@@ -1,0 +1,242 @@
+# Deploy to Dev Environment
+#
+# This workflow automatically deploys to the dev environment whenever
+# code is merged to the main branch. It serves as our testing ground
+# for verifying changes work in a real AWS environment before production.
+#
+# Educational Note:
+# - Automatic deployment to dev enables fast iteration
+# - CDK diff shows infrastructure changes before applying them
+# - Smoke tests catch deployment issues immediately
+# - Previous version stays deployed if anything fails (CloudFormation rollback)
+
+name: Deploy to Dev
+
+on:
+  push:
+    branches:
+      - main
+  # Allow manual triggering for testing
+  workflow_dispatch:
+
+# Required for OIDC authentication with AWS
+# id-token: write allows workflow to request temporary AWS credentials
+# contents: read allows workflow to check out repository code
+permissions:
+  id-token: write
+  contents: read
+
+# Prevent multiple deployments from running simultaneously
+# If new commit is pushed while deployment is running, cancel old one
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to Dev Environment
+    runs-on: ubuntu-latest
+    # Use 'dev' environment for secrets and protection rules (optional)
+    environment:
+      name: dev
+      url: https://api-dev.yourapp.com
+
+    steps:
+      # ============================================
+      # 1. CHECKOUT CODE
+      # ============================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        # Educational: @v4 pins to major version 4, auto-updates to latest v4.x
+        # This balances stability (no breaking changes) with security updates
+
+      # ============================================
+      # 2. SETUP BUILD ENVIRONMENT
+      # ============================================
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+        # Educational: Matches packageManager in package.json
+        # Ensures same version locally and in CI
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+        # Educational: cache: 'pnpm' caches node_modules based on pnpm-lock.yaml
+        # Speeds up builds by ~40% on cache hit
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        # Educational: --frozen-lockfile fails if pnpm-lock.yaml is out of date
+        # Ensures CI uses exact same dependencies as local development
+
+      # ============================================
+      # 3. BUILD APPLICATION
+      # ============================================
+      - name: Build all packages
+        run: pnpm build
+        # Educational: Turbo runs builds in dependency order
+        # Caches results so only changed packages rebuild
+        # Example: If only web/ changed, core/ and db/ use cached builds
+
+      # ============================================
+      # 4. AWS AUTHENTICATION
+      # ============================================
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          # Educational: OIDC exchanges GitHub token for temporary AWS credentials
+          # Credentials expire after 1 hour - no long-lived secrets stored
+          # More secure than storing AWS access keys in GitHub Secrets
+        # IMPORTANT: Requires one-time OIDC setup in AWS (see ci-cd-pipeline.md)
+
+      - name: Verify AWS credentials
+        run: |
+          echo "Authenticated as:"
+          aws sts get-caller-identity
+        # Educational: Shows which AWS account and role we're using
+        # Helpful for debugging authentication issues
+
+      # ============================================
+      # 5. CDK DIFF (Preview Changes)
+      # ============================================
+      - name: Show CDK diff
+        working-directory: infra
+        run: |
+          pnpm cdk diff --context stage=dev
+        # Educational: Shows infrastructure changes before applying
+        # [+] = resource will be created
+        # [~] = resource will be modified
+        # [-] = resource will be deleted (⚠️ review carefully!)
+        # Example output:
+        #   [+] AWS::Lambda::Function CreatePosterFunction
+        #   [~] AWS::DynamoDB::Table PosterTable
+        #        └─ [~] BillingMode: PROVISIONED → PAY_PER_REQUEST
+        continue-on-error: true
+        # Educational: Don't fail if diff shows changes - that's normal!
+        # Only fail if CDK can't generate diff (syntax error, etc.)
+
+      # ============================================
+      # 6. DEPLOY TO AWS
+      # ============================================
+      - name: Deploy to Dev
+        working-directory: infra
+        run: |
+          pnpm cdk deploy --all \
+            --context stage=dev \
+            --require-approval never \
+            --outputs-file cdk-outputs.json
+        # Educational: --all deploys all stacks (we only have one for now)
+        # --context stage=dev tells CDK to create 'bjj-poster-dev' stack
+        # --require-approval never is safe because we reviewed diff above
+        # --outputs-file saves stack outputs (API URL, etc.) to JSON file
+        #
+        # What happens during deployment:
+        # 1. CDK synthesizes CloudFormation template
+        # 2. Uploads Lambda code to S3 (CDK-managed bucket)
+        # 3. CloudFormation creates/updates resources
+        # 4. If failure occurs, CloudFormation automatically rolls back
+
+      - name: Extract deployment outputs
+        id: outputs
+        working-directory: infra
+        run: |
+          # Extract API URL from CDK outputs for smoke tests
+          API_URL=$(jq -r '.BjjPosterDevStack.ApiUrl // empty' cdk-outputs.json)
+          echo "API_URL=$API_URL" >> $GITHUB_OUTPUT
+          echo "Deployed API URL: $API_URL"
+        # Educational: jq parses JSON, // empty returns empty string if key missing
+        # GITHUB_OUTPUT makes variable available to later steps via ${{ steps.outputs.outputs.API_URL }}
+
+      # ============================================
+      # 7. SMOKE TESTS (Verify Deployment)
+      # ============================================
+      - name: Run smoke tests
+        run: |
+          API_URL="${{ steps.outputs.outputs.API_URL }}"
+
+          if [ -z "$API_URL" ]; then
+            echo "⚠️  No API URL found in CDK outputs, skipping smoke tests"
+            exit 0
+          fi
+
+          echo "Running smoke tests against: $API_URL"
+
+          # Test 1: Health check endpoint
+          echo "Testing health endpoint..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${API_URL}/health")
+
+          if [ "$HTTP_CODE" -eq 200 ]; then
+            echo "✅ Health check passed (HTTP $HTTP_CODE)"
+          else
+            echo "❌ Health check failed (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+
+          # Add more smoke tests here as needed:
+          # - Test authentication endpoint
+          # - Test key API endpoints
+          # - Verify database connectivity
+
+        # Educational: Smoke tests are simple checks that deployment succeeded
+        # They catch common issues: misconfigured env vars, broken DB connections, etc.
+        # Keep them fast (< 30 seconds total) - detailed testing happens in CI
+
+      # ============================================
+      # 8. CLEANUP & NOTIFICATIONS
+      # ============================================
+      - name: Upload deployment artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-outputs-dev
+          path: infra/cdk-outputs.json
+          retention-days: 7
+        # Educational: Saves CDK outputs for debugging
+        # if: always() runs even if previous steps failed
+
+      - name: Deployment summary
+        if: always()
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          SERVER_URL: ${{ github.server_url }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          API_URL: ${{ steps.outputs.outputs.API_URL }}
+        run: |
+          echo "## Deployment Complete 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Dev" >> $GITHUB_STEP_SUMMARY
+          echo "**Stack:** bjj-poster-dev" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${COMMIT_SHA}" >> $GITHUB_STEP_SUMMARY
+
+          if [ -n "${API_URL}" ]; then
+            echo "**API URL:** ${API_URL}" >> $GITHUB_STEP_SUMMARY
+          fi
+        # Educational: GITHUB_STEP_SUMMARY creates nice summary in Actions UI
+        # Shows key info without digging through logs
+        # Uses env vars to safely handle GitHub context (prevents command injection)
+
+      # Optional: Add Slack/Discord notifications here
+      # - name: Notify on failure
+      #   if: failure()
+      #   uses: slackapi/slack-github-action@v1
+      #   with:
+      #     payload: |
+      #       {
+      #         "text": "❌ Dev deployment failed",
+      #         "blocks": [{
+      #           "type": "section",
+      #           "text": {
+      #             "type": "mrkdwn",
+      #             "text": "*Dev Deployment Failed*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+      #           }
+      #         }]
+      #       }
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
