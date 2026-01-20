@@ -446,6 +446,28 @@ export class UserRepository {
       updatedAt: item.updatedAt,
       postersThisMonth: item.postersThisMonth,
       usageResetAt: item.usageResetAt,
+      lastActiveAt: item.lastActiveAt,
     };
+  }
+
+  /**
+   * Update user's lastActiveAt timestamp.
+   * Called fire-and-forget from profile endpoint for activity tracking.
+   */
+  async updateLastActiveAt(userId: string): Promise<void> {
+    const now = new Date().toISOString();
+    await this.client.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: {
+          PK: `USER#${userId}`,
+          SK: 'PROFILE',
+        },
+        UpdateExpression: 'SET lastActiveAt = :now, updatedAt = :now',
+        ExpressionAttributeValues: {
+          ':now': now,
+        },
+      })
+    );
   }
 }

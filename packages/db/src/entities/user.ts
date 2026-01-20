@@ -18,6 +18,7 @@ export interface User {
   updatedAt: string;
   postersThisMonth?: number;
   usageResetAt?: string;
+  lastActiveAt?: string;
 }
 
 /**
@@ -37,6 +38,7 @@ export interface UserItem {
   updatedAt: string;
   postersThisMonth?: number;
   usageResetAt?: string;
+  lastActiveAt?: string;
 }
 
 export interface UpdateSubscriptionInput {
