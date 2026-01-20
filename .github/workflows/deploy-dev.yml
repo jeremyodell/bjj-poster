@@ -1,7 +1,7 @@
 # Deploy to Dev Environment
 #
 # This workflow automatically deploys to the dev environment whenever
-# code is merged to the main branch. It serves as our testing ground
+# code is merged to the master branch. It serves as our testing ground
 # for verifying changes work in a real AWS environment before production.
 #
 # Educational Note:
@@ -15,7 +15,7 @@ name: Deploy to Dev
 on:
   push:
     branches:
-      - main
+      - master
   # Allow manual triggering for testing
   workflow_dispatch:
 
